@@ -1,1 +1,5 @@
 textual
+# Proveedor OpenAI (y compatibles: Ollama, LM Studio, OpenRouter…)
+openai
+# Proveedor Gemini (Google)
+google-generativeai

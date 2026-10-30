@@ -3,7 +3,7 @@ Cliente LLM — abstracción sobre el proveedor de lenguaje.
 
 Responsabilidades:
     - Enviar el contexto estructurado al LLM y recibir la respuesta en texto.
-    - Abstraer el proveedor concreto (OpenAI, Ollama, etc.) detrás de un Protocol.
+    - Abstraer el proveedor concreto (OpenAI, Gemini, Ollama, etc.) detrás de un Protocol.
     - Extraer datos estructurados del texto de respuesta cuando se solicita
       (recuerdos candidatos, datos de PERFIL_USUARIO).
 
@@ -32,12 +32,12 @@ class ClienteLLM(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Implementación OpenAI
+# Implementación OpenAI (y compatibles: Ollama, LM Studio, OpenRouter…)
 # ---------------------------------------------------------------------------
 
 class ClienteOpenAI:
     """
-    Cliente para la API de OpenAI (o compatible: Ollama, LM Studio, etc.).
+    Cliente para la API de OpenAI (o compatible: Ollama, LM Studio, OpenRouter, etc.).
 
     Parámetros:
         modelo      — nombre del modelo, p.ej. "gpt-4o-mini"
@@ -74,6 +74,87 @@ class ClienteOpenAI:
             temperature=self._temperatura,
         )
         return respuesta.choices[0].message.content or ""
+
+
+# ---------------------------------------------------------------------------
+# Implementación Gemini (Google Generative AI)
+# ---------------------------------------------------------------------------
+
+class ClienteGemini:
+    """
+    Cliente para la API de Google Gemini usando el SDK nativo.
+
+    Parámetros:
+        modelo      — nombre del modelo, p.ej. "gemini-1.5-flash" o "gemini-2.0-flash-exp"
+        api_key     — clave de API; None la lee de GEMINI_API_KEY
+        temperatura — controla la aleatoriedad de las respuestas [0.0, 2.0]
+
+    Convierte el formato {role, content} estándar al formato de Gemini.
+    El mensaje de sistema (role="system") se inyecta como instrucción del sistema.
+    """
+
+    def __init__(
+        self,
+        modelo: str = "gemini-1.5-flash",
+        api_key: str | None = None,
+        temperatura: float = 0.8,
+    ) -> None:
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise ImportError(
+                "google-generativeai no está instalado. "
+                "Ejecuta: pip install google-generativeai"
+            )
+
+        clave = api_key or os.environ.get("GEMINI_API_KEY", "")
+        if not clave:
+            raise ValueError(
+                "Falta la clave de API de Gemini. "
+                "Define GEMINI_API_KEY o pásala como api_key."
+            )
+
+        genai.configure(api_key=clave)
+        self._genai = genai
+        self._nombre_modelo = modelo
+        self._temperatura = temperatura
+
+    def completar(self, mensajes: list[dict[str, str]]) -> str:
+        # Separar el mensaje de sistema del historial de chat
+        instruccion_sistema = ""
+        historial_chat: list[dict[str, str]] = []
+
+        for msg in mensajes:
+            if msg["role"] == "system":
+                instruccion_sistema = msg["content"]
+            else:
+                historial_chat.append(msg)
+
+        modelo = self._genai.GenerativeModel(
+            model_name=self._nombre_modelo,
+            system_instruction=instruccion_sistema or None,
+            generation_config=self._genai.types.GenerationConfig(
+                temperature=self._temperatura,
+            ),
+        )
+
+        # Convertir historial al formato de Gemini
+        # Gemini usa "user" / "model" (no "assistant")
+        partes_gemini = []
+        for msg in historial_chat:
+            rol = "model" if msg["role"] == "assistant" else "user"
+            partes_gemini.append({"role": rol, "parts": [msg["content"]]})
+
+        if not partes_gemini:
+            return ""
+
+        # El último mensaje es el turno actual del usuario
+        ultimo = partes_gemini[-1]
+        historial_previo = partes_gemini[:-1]
+
+        chat = modelo.start_chat(history=historial_previo)
+        respuesta = chat.send_message(ultimo["parts"][0])
+        return respuesta.text or ""
 
 
 # ---------------------------------------------------------------------------

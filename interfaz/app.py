@@ -8,14 +8,20 @@ Responsabilidades:
     - Lanzar la PantallaChat.
 
 Uso:
-    python -m interfaz.app
+    python -m interfaz
 
 Variables de entorno:
     NOVIA_DATOS       — ruta al directorio de datos (por defecto: ./data)
+    NOVIA_STUB        — si está definida, usa el ClienteStub sin LLM real
+
+    Proveedor OpenAI (por defecto si GEMINI_API_KEY no esta definida):
     OPENAI_API_KEY    — clave de API de OpenAI
     NOVIA_MODELO      — modelo a usar (por defecto: gpt-4o-mini)
-    NOVIA_URL_BASE    — URL base alternativa (Ollama, LM Studio, etc.)
-    NOVIA_STUB        — si está definida, usa el ClienteStub en lugar del real
+    NOVIA_URL_BASE    — URL base alternativa (Ollama, LM Studio, OpenRouter...)
+
+    Proveedor Gemini (activo si GEMINI_API_KEY esta definida):
+    GEMINI_API_KEY    — clave de API de Google Gemini
+    NOVIA_MODELO      — modelo a usar (por defecto: gemini-1.5-flash)
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 
-from aplicacion.cliente_llm import ClienteOpenAI, ClienteStub
+from aplicacion.cliente_llm import ClienteGemini, ClienteOpenAI, ClienteStub
 from aplicacion.gestor_turno import GestorTurno
 from dominio.modelos import Estado, Personaje, Relacion, Usuario
 from interfaz.pantallas.chat import PantallaChat
@@ -139,9 +145,17 @@ class NoviApp(App):
         self._repos = crear_repositorios(ruta_datos)
         _asegurar_datos_iniciales(self._repos)
 
-        # Cliente LLM
+        # Cliente LLM — se elige el proveedor según las variables de entorno:
+        #   NOVIA_STUB        → stub sin LLM (modo desarrollo)
+        #   GEMINI_API_KEY    → Google Gemini
+        #   OPENAI_API_KEY    → OpenAI (o compatible vía NOVIA_URL_BASE)
         if os.environ.get("NOVIA_STUB"):
             cliente = ClienteStub("… (modo stub sin LLM)")
+        elif os.environ.get("GEMINI_API_KEY"):
+            cliente = ClienteGemini(
+                modelo=os.environ.get("NOVIA_MODELO", "gemini-1.5-flash"),
+                api_key=os.environ.get("GEMINI_API_KEY"),
+            )
         else:
             cliente = ClienteOpenAI(
                 modelo=os.environ.get("NOVIA_MODELO", "gpt-4o-mini"),
