@@ -287,9 +287,9 @@ class PerfilUsuarioJson:
                 return _dict_a_perfil(d)
         raise KeyError(f"PerfilUsuario {num} no encontrado")
 
-    def obtener_por_clave(self, relacion_id: int, clave: str) -> Optional[PerfilUsuario]:
+    def obtener_por_clave(self, relacion_id: int, sujeto: str, clave: str) -> Optional[PerfilUsuario]:
         for d in leer_json(self._ruta):
-            if d["relacion_id"] == relacion_id and d["clave"] == clave:
+            if d["relacion_id"] == relacion_id and d["sujeto"] == sujeto and d["clave"] == clave:
                 return _dict_a_perfil(d)
         return None
 
@@ -299,6 +299,7 @@ class PerfilUsuarioJson:
             entrada = PerfilUsuario(
                 num=siguiente_id(registros),
                 relacion_id=entrada.relacion_id,
+                sujeto=entrada.sujeto,
                 clave=entrada.clave,
                 valor=entrada.valor,
                 origen=entrada.origen,
@@ -331,6 +332,7 @@ def _dict_a_perfil(d: dict) -> PerfilUsuario:
     return PerfilUsuario(
         num=d["num"],
         relacion_id=d["relacion_id"],
+        sujeto=d.get("sujeto", "usuario"),
         clave=d["clave"],
         valor=d["valor"],
         origen=d["origen"],

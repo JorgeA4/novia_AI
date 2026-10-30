@@ -131,14 +131,35 @@ def construir_sistema(
         lineas = [f"  - {r.contenido}" for r in recuerdos_relevantes]
         secciones.append("Recuerdas sobre esta relación:\n" + "\n".join(lineas))
 
-    # --- Perfil del usuario ---
+    # --- Perfil de personas relevantes ---
     perfil_relevante = [
         p for p in perfil_usuario
         if confianza_final_de(p) >= CONFIANZA_MINIMA_PERFIL
     ]
     if perfil_relevante:
-        lineas = [f"  - {p.clave}: {p.valor}" for p in perfil_relevante]
-        secciones.append(f"Lo que sabes de {nombre_usuario}:\n" + "\n".join(lineas))
+        # Agrupar por sujeto
+        por_sujeto: dict[str, list[PerfilUsuario]] = {}
+        for p in perfil_relevante:
+            por_sujeto.setdefault(p.sujeto, []).append(p)
+
+        bloques: list[str] = []
+        # Orden preferente: usuario primero, personaje segundo, terceros al final
+        orden = ["usuario", "personaje"] + sorted(
+            s for s in por_sujeto if s not in ("usuario", "personaje")
+        )
+        for sujeto in orden:
+            if sujeto not in por_sujeto:
+                continue
+            if sujeto == "usuario":
+                etiqueta = nombre_usuario
+            elif sujeto == "personaje":
+                etiqueta = f"{personaje.nombre} (tú)"
+            else:
+                etiqueta = sujeto.replace("tercero:", "", 1)
+            lineas = [f"    - {p.clave}: {p.valor}" for p in por_sujeto[sujeto]]
+            bloques.append(f"  [{etiqueta}]\n" + "\n".join(lineas))
+
+        secciones.append("Lo que sabes de las personas relevantes:\n" + "\n".join(bloques))
 
     # --- Instrucción de formato de respuesta ---
     codigos_emocion = ", ".join(
@@ -168,11 +189,17 @@ def construir_sistema(
         f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n\n"
         "Formato de cada elemento en recuerdos:\n"
         "  { \"tipo\": \"episodico\" | \"relacional\", \"contenido\": \"...\", \"importancia\": 0.5–1.0 }\n"
-        "  Solo incluye un recuerdo si el intercambio contiene algo concreto y singular "
-        "(una confesión, un dato personal, un momento emocional fuerte). Máximo 2 por turno.\n\n"
+        "  ANTES de añadir un recuerdo, comprueba la lista de recuerdos que ya tienes arriba.\n"
+        "  Solo incluye un recuerdo si cumple LAS DOS condiciones:\n"
+        "    1. El intercambio contiene algo concreto y singular (confesión, dato personal, momento emocional fuerte).\n"
+        "    2. Ninguno de los recuerdos existentes ya cubre ese mismo hecho o emoción.\n"
+        "  Si el hecho ya está registrado, devuelve recuerdos: [].\n"
+        "  Máximo 2 por turno.\n\n"
         "Formato de cada elemento en perfil:\n"
-        "  { \"clave\": \"...\", \"valor\": \"...\", \"confianza_llm\": 0.5–1.0 }\n"
-        "  Solo incluye datos factuales explícitos del usuario (nombre, profesión, ciudad, hobby…). "
+        "  { \"sujeto\": \"usuario\"|\"personaje\"|\"tercero:<nombre>\", \"clave\": \"...\", \"valor\": \"...\", \"confianza_llm\": 0.5–1.0 }\n"
+        "  `sujeto` indica de quién es el dato: \"usuario\" para el usuario, \"personaje\" para ti mismo,\n"
+        "  \"tercero:<nombre>\" para cualquier otra persona mencionada (ej. \"tercero:mama\").\n"
+        "  Solo incluye datos factuales explícitos (nombre, profesión, ciudad, hobby, edad…). "
         "0.9 = lo dijo directamente, 0.5 = se infirió del contexto."
     )
 

@@ -260,27 +260,42 @@ class GestorTurno:
         repos.relacion.guardar(relacion)
 
         # --- 8b. Persistir recuerdos extraídos ---
+        # `recuerdos` ya está cargado arriba (paso 4); se usa para deduplicar.
+        # Se actualiza en cada iteración para que dos recuerdos del mismo turno
+        # tampoco se dupliquen entre sí.
         vigencia = ahora + timedelta(days=cfg.recuerdos.vigencia_dias)
         for r in turno.get("recuerdos", []):
             try:
-                repos.recuerdo.guardar(Recuerdo(
+                contenido = str(r["contenido"])
+                if _es_duplicado(contenido, recuerdos):
+                    continue  # ya existe uno semánticamente equivalente — descartar
+                nuevo_recuerdo = Recuerdo(
                     num=0,
                     relacion_id=relacion_id,
                     tipo=str(r.get("tipo", "episodico")),
-                    contenido=str(r["contenido"]),
+                    contenido=contenido,
                     origen="llm",
                     importancia=max(0.0, min(1.0, float(r.get("importancia", 0.6)))),
                     fecha_creacion=ahora,
                     ultima_relevancia=ahora,
                     vigencia=vigencia,
                     embedding=None,
-                ))
+                )
+                repos.recuerdo.guardar(nuevo_recuerdo)
+                recuerdos.append(nuevo_recuerdo)  # actualizar lista local para deduplicar el siguiente
             except (KeyError, TypeError, ValueError):
                 pass  # recuerdo malformado — ignorar silenciosamente
 
         # --- 8c. Persistir datos de perfil extraídos ---
+        sujetos_validos = {"usuario", "personaje"}
         for p in turno.get("perfil", []):
             try:
+                sujeto_raw = str(p.get("sujeto", "usuario")).strip()
+                # Normalizar: "usuario", "personaje" o "tercero:<nombre>"
+                if sujeto_raw not in sujetos_validos and not sujeto_raw.startswith("tercero:"):
+                    sujeto_raw = "usuario"
+                sujeto = sujeto_raw
+
                 clave = str(p["clave"]).strip()
                 valor = str(p["valor"]).strip()
                 confianza_llm = max(0.0, min(1.0, float(p.get("confianza_llm", 0.7))))
@@ -290,12 +305,13 @@ class GestorTurno:
                 nueva = PerfilUsuario(
                     num=0,
                     relacion_id=relacion_id,
+                    sujeto=sujeto,
                     clave=clave,
                     valor=valor,
                     origen="llm",
                     confianza_llm=confianza_llm,
                 )
-                existente = repos.perfil_usuario.obtener_por_clave(relacion_id, clave)
+                existente = repos.perfil_usuario.obtener_por_clave(relacion_id, sujeto, clave)
                 if existente is None:
                     repos.perfil_usuario.guardar(nueva)
                 else:
@@ -367,6 +383,39 @@ class GestorTurno:
             etapa_nueva=etapa_nueva,
             deltas_turno=deltas,
         )
+
+
+# ---------------------------------------------------------------------------
+# Deduplicación de recuerdos por similitud Jaccard
+# ---------------------------------------------------------------------------
+
+def _tokens(texto: str) -> set[str]:
+    """Extrae tokens en minúsculas de longitud >= 3 de un texto."""
+    return {t for t in texto.lower().split() if len(t) >= 3}
+
+
+def _similitud_jaccard(a: str, b: str) -> float:
+    """Similitud de Jaccard entre los conjuntos de tokens de dos textos."""
+    ta, tb = _tokens(a), _tokens(b)
+    if not ta and not tb:
+        return 1.0
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
+_UMBRAL_DUPLICADO: float = 0.45
+
+
+def _es_duplicado(contenido_nuevo: str, recuerdos_existentes: "list[Recuerdo]") -> bool:
+    """
+    Devuelve True si `contenido_nuevo` es semánticamente equivalente a alguno
+    de los recuerdos existentes (similitud Jaccard >= _UMBRAL_DUPLICADO).
+    """
+    for r in recuerdos_existentes:
+        if _similitud_jaccard(contenido_nuevo, r.contenido) >= _UMBRAL_DUPLICADO:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

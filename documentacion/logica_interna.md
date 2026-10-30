@@ -113,7 +113,15 @@ Factores de origen (el valor del LLM se lee de `configuracion.json`):
 "llm"               → × penalizacion_inferencia  (0.7 por defecto)
 ```
 
-Al resolver duplicados (misma `clave`): gana el de mayor `confianza_final`. Si la diferencia es pequeña (< umbral), se conserva el existente y se marca para revisión.
+Al resolver duplicados (misma `sujeto` + `clave`): gana el de mayor `confianza_final`. Si la diferencia es pequeña (< umbral), se conserva el existente y se marca para revisión.
+
+El campo `sujeto` identifica de quién es el dato. Valores válidos:
+```
+"usuario"          — el usuario de la relación
+"personaje"        — el propio personaje
+"tercero:<nombre>" — tercera persona mencionada (ej. "tercero:mama")
+```
+La clave única de un dato de perfil es la tripleta `(relacion_id, sujeto, clave)`.
 
 ---
 
@@ -192,6 +200,22 @@ Las condiciones de umbral se evalúan sobre los campos de `RELACION`. El modo de
 - **Permiso** — condiciones cumplidas pero se necesita un momento decisivo (el sistema hace una llamada auxiliar al LLM para verificarlo)
 
 Al avanzar de etapa, el sentimiento se actualiza: el sistema asigna el sentimiento correspondiente a la nueva etapa y suma `delta_sentimiento_al_avanzar` (config) a la intensidad vigente.
+
+---
+
+## Deduplicación de RECUERDO
+
+El LLM tiende a generar recuerdos duplicados cuando el usuario vuelve a mencionar un hecho ya registrado. Se aplican dos capas de protección:
+
+**Capa B — instrucción al LLM:** el system prompt incluye explícitamente los recuerdos existentes como lista de verificación. La instrucción exige comprobar que ningún recuerdo existente ya cubre el mismo hecho antes de añadir uno nuevo.
+
+**Capa A — filtro en código (Jaccard):** antes de persistir, se calcula la similitud de Jaccard entre los tokens del candidato y cada recuerdo existente:
+```
+similitud = |tokens(nuevo) ∩ tokens(existente)| / |tokens(nuevo) ∪ tokens(existente)|
+```
+Tokens = palabras en minúsculas de longitud ≥ 3. Umbral: `0.45`. Si la similitud supera el umbral, el recuerdo se descarta silenciosamente. La lista local se actualiza en cada iteración del turno para evitar también duplicados dentro del mismo turno.
+
+La capa B captura paráfrasis semánticas (vocabulario diferente, mismo significado). La capa A captura variantes verbosas del mismo texto.
 
 ---
 

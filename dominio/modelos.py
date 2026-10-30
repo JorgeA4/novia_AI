@@ -157,7 +157,12 @@ class Estado:
 @dataclass
 class PerfilUsuario:
     """
-    Dato factual que el personaje ha aprendido sobre el usuario.
+    Dato factual que el personaje ha aprendido sobre cualquier persona relevante.
+
+    `sujeto` identifica de quién es el dato:
+        "usuario"           — el usuario de la relación (ej. Jorge)
+        "personaje"         — el propio personaje (ej. Luna)
+        "tercero:<nombre>"  — cualquier tercera persona mencionada (ej. "tercero:mama")
 
     confianza_final = confianza_llm × factor_origen
         "usuario_explicito" → × 1.0
@@ -166,6 +171,7 @@ class PerfilUsuario:
     """
     num: int
     relacion_id: int
+    sujeto: str           # "usuario" | "personaje" | "tercero:<nombre>"
     clave: str
     valor: str
     origen: str           # "sistema" | "llm" | "usuario_explicito"
