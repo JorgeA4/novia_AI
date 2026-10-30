@@ -22,7 +22,6 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Label
 
 from aplicacion.gestor_turno import GestorTurno, ResultadoTurno
-from dominio.emociones import calcular_emocion_actual
 from interfaz.widgets.burbuja import BurbujaMensaje
 from interfaz.widgets.indicador import IndicadorEstado
 
@@ -133,11 +132,12 @@ class PantallaChat(Screen):
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
         catalogo_idx = {e.codigo: e for e in catalogo}
 
-        emocion_actual = calcular_emocion_actual(estado, catalogo)
         etapa_nombre = etapas.get(relacion.etapa, None)
         etapa_str = etapa_nombre.nombre if etapa_nombre else relacion.etapa
 
-        # Nombres legibles de estado_animo y sentimiento desde el catálogo
+        # Nombres legibles de las tres capas directamente desde el catálogo
+        emo_nombre = catalogo_idx.get(estado.emocion_id)
+        emo_str = emo_nombre.nombre if emo_nombre else estado.emocion_id
         animo_nombre = catalogo_idx.get(estado.estado_animo_id)
         animo_str = animo_nombre.nombre if animo_nombre else estado.estado_animo_id
         sent_nombre = catalogo_idx.get(estado.sentimiento_id)
@@ -145,7 +145,8 @@ class PantallaChat(Screen):
 
         self.query_one(IndicadorEstado).actualizar(
             etapa=etapa_str,
-            emocion=emocion_actual.nombre,
+            emocion=emo_str,
+            emocion_int=estado.emocion_intensidad,
             estado_animo=animo_str,
             estado_animo_int=estado.estado_animo_intensidad,
             sentimiento=sent_str,

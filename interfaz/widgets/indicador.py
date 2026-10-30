@@ -79,6 +79,7 @@ class IndicadorEstado(Widget):
         super().__init__()
         self._etapa = "—"
         self._emocion = "—"
+        self._emocion_int = 0.0
         self._estado_animo = "—"
         self._estado_animo_int = 0.0
         self._sentimiento = "—"
@@ -96,7 +97,11 @@ class IndicadorEstado(Widget):
         yield Static("─" * 24, classes="indicador-separador")
         yield Label("── Capas emocionales ──", classes="indicador-subtitulo")
         yield Label("Emoción inmediata:", classes="indicador-etiqueta")
-        yield Label(self._emocion, id="ind-emocion", classes="indicador-valor")
+        yield Label(
+            self._fmt_capa(self._emocion, self._emocion_int),
+            id="ind-emocion",
+            classes="indicador-valor",
+        )
         yield Label("Estado de ánimo:", classes="indicador-etiqueta")
         yield Label(
             self._fmt_capa(self._estado_animo, self._estado_animo_int),
@@ -125,6 +130,7 @@ class IndicadorEstado(Widget):
         self,
         etapa: str,
         emocion: str,
+        emocion_int: float,
         estado_animo: str,
         estado_animo_int: float,
         sentimiento: str,
@@ -137,6 +143,7 @@ class IndicadorEstado(Widget):
         """Actualiza todos los valores del panel y refresca los labels."""
         self._etapa = etapa
         self._emocion = emocion
+        self._emocion_int = emocion_int
         self._estado_animo = estado_animo
         self._estado_animo_int = estado_animo_int
         self._sentimiento = sentimiento
@@ -147,7 +154,9 @@ class IndicadorEstado(Widget):
         self._tension = tension
 
         self.query_one("#ind-etapa", Label).update(etapa)
-        self.query_one("#ind-emocion", Label).update(emocion)
+        self.query_one("#ind-emocion", Label).update(
+            self._fmt_capa(emocion, emocion_int)
+        )
         self.query_one("#ind-estado-animo", Label).update(
             self._fmt_capa(estado_animo, estado_animo_int)
         )
