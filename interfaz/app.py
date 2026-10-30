@@ -75,9 +75,13 @@ RELACION_DEFECTO = Relacion(
     usuario_id=1,
     etapa="desconocidos",
     confianza=0.05,
+    confianza_delta=0.0,
     afecto=0.05,
+    afecto_delta=0.0,
     familiaridad=0.0,
     tension=0.0,
+    disposicion=0.5,
+    disposicion_delta=0.0,
 )
 
 ESTADO_DEFECTO = Estado(
