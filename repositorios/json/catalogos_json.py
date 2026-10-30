@@ -90,6 +90,7 @@ class CatalogosJson:
                     codigo=d["codigo"],
                     nombre=d["nombre"],
                     descripcion=d.get("descripcion", ""),
+                    categoria=d.get("categoria", "cotidiano"),
                 )
                 for d in datos
             ]

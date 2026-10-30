@@ -79,9 +79,19 @@ class TransicionEtapa:
 
 @dataclass
 class TipoEvento:
+    """
+    Entrada del catálogo de tipos de evento.
+
+    `categoria` determina el cap de velocidad de cambio aplicado cuando el
+    evento actualiza las métricas de RELACION (ver logica_interna.md):
+        "cotidiano"     → cap ±0.03  (conversación normal, mensaje breve)
+        "significativo" → cap ±0.10  (conversación larga, discusión real)
+        "extraordinario"→ sin cap    (confesión, traición, ruptura)
+    """
     codigo: str
     nombre: str
     descripcion: str
+    categoria: str  # "cotidiano" | "significativo" | "extraordinario"
 
 
 # ---------------------------------------------------------------------------
@@ -113,11 +123,15 @@ class Relacion:
     num: int
     personaje_id: int
     usuario_id: int
-    etapa: str            # FK -> EtapaRelacion.codigo
-    confianza: float      # [0.0, 1.0]
-    afecto: float         # [0.0, 1.0]
-    familiaridad: float   # [0.0, 1.0]
-    tension: float        # [0.0, 1.0]
+    etapa: str              # FK -> EtapaRelacion.codigo
+    confianza: float        # [0.0, 1.0]
+    confianza_delta: float  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
+    afecto: float           # [0.0, 1.0]
+    afecto_delta: float     # [-1.0, 1.0] — tasa de cambio reciente (EMA)
+    familiaridad: float     # [0.0, 1.0]
+    tension: float          # [0.0, 1.0]
+    disposicion: float      # [0.0, 1.0] — tendencia base a buscar contacto
+    disposicion_delta: float  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
 
 
 @dataclass

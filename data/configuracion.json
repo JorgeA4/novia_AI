@@ -1,0 +1,51 @@
+{
+  "_comentario": "Parámetros de diseño del sistema emocional. Cambiar aquí afecta todo el comportamiento sin tocar código.",
+
+  "capas": {
+    "peso_emocion": 0.50,
+    "peso_estado_animo": 0.35,
+    "peso_sentimiento": 0.15
+  },
+
+  "presion_turno": {
+    "factor_presion_base": 0.015,
+    "centroide_moderacion": 0.65,
+    "amplitud_moderacion": 0.35
+  },
+
+  "deriva_sentimiento": {
+    "factor_deriva_por_hora": 0.002
+  },
+
+  "decaimiento": {
+    "semivida_emocion_segundos": 3600,
+    "semivida_estado_animo_segundos": 86400,
+    "umbral_corte": 0.01
+  },
+
+  "inercia_estado_animo": {
+    "factor": 0.25
+  },
+
+  "confianza_llm": {
+    "penalizacion_inferencia": 0.7
+  },
+
+  "relacion": {
+    "ema_alpha": 0.6,
+    "tau_horas_interes": 24.0,
+    "umbral_impulso_automatico": 0.15,
+    "cap_cotidiano": 0.03,
+    "cap_significativo": 0.10,
+    "impulso_disposicion_base": 0.01
+  },
+
+  "recuerdos": {
+    "vigencia_dias": 30
+  },
+
+  "transicion_etapa": {
+    "impacto_evento": 0.2,
+    "delta_sentimiento_al_avanzar": 0.2
+  }
+}

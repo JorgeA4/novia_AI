@@ -91,13 +91,30 @@ def construir_sistema(
         secciones.append(f"No soportas: {', '.join(personaje.aversiones)}")
 
     # --- Estado relacional ---
-    secciones.append(
-        f"Tu relación con {nombre_usuario} está en etapa: {etapa.nombre}.\n"
-        f"  Confianza: {relacion.confianza:.2f} | "
-        f"Afecto: {relacion.afecto:.2f} | "
-        f"Familiaridad: {relacion.familiaridad:.2f} | "
-        f"Tensión: {relacion.tension:.2f}"
+    # Línea de tendencias: solo incluye las métricas con _delta significativo (≥ 0.01)
+    tendencias: list[str] = []
+    for nombre_campo, valor_delta in (
+        ("confianza", relacion.confianza_delta),
+        ("afecto",    relacion.afecto_delta),
+        ("disp",      relacion.disposicion_delta),
+    ):
+        if abs(valor_delta) >= 0.01:
+            tendencias.append(f"{nombre_campo}={valor_delta:+.2f}")
+
+    linea_metricas = (
+        f"métricas  confianza={relacion.confianza:.2f}  afecto={relacion.afecto:.2f}"
+        f"  familiaridad={relacion.familiaridad:.2f}  tension={relacion.tension:.2f}"
+        f"  disp={relacion.disposicion:.2f}"
     )
+    linea_tendencias = (
+        ("tendencia " + "  ".join(tendencias)) if tendencias else ""
+    )
+
+    bloque_relacion = f"RELACIÓN · etapa: {etapa.nombre}\n{linea_metricas}"
+    if linea_tendencias:
+        bloque_relacion += f"\n{linea_tendencias}"
+
+    secciones.append(bloque_relacion)
 
     # --- Estado emocional actual ---
     secciones.append(
@@ -145,7 +162,8 @@ def construir_sistema(
         "  recuerdos           (array) — lista de recuerdos a guardar; vacía [] si no hay nada memorable\n"
         "  perfil              (array) — lista de datos factuales aprendidos del usuario; vacía [] si ninguno\n\n"
         "Guía para los deltas de relación (+0.3 = efecto notable positivo, 0.0 = sin cambio, "
-        "-0.3 = efecto notable negativo). Las cuatro dimensiones son independientes.\n\n"
+        "-0.3 = efecto notable negativo). Las cuatro dimensiones son independientes.\n"
+        "La disposición a buscar contacto la calcula el sistema — no la incluyas en tu respuesta.\n\n"
         f"Valores válidos para emocion_id: {codigos_emocion}\n"
         f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n\n"
         "Formato de cada elemento en recuerdos:\n"

@@ -56,7 +56,25 @@ La intensidad de la capa `emocion` decae con el tiempo (tasa rápida, horas).
 La intensidad de la capa `estado_animo` decae más lento (días).
 La capa `sentimiento` apenas decae sola — solo la modifican eventos reales.
 
-**El decaimiento no cae al neutro.** Cuando la intensidad de `emocion` baja, su contribución al vector compuesto disminuye y el `estado_animo` gana peso relativo. El vector resultante **deriva naturalmente** hacia donde está el estado de ánimo.
+**Función de decaimiento: exponencial.**
+
+```
+intensidad_nueva = intensidad × e^(−tasa × segundos)
+```
+
+La tasa usa semivida como parámetro intuitivo: `tasa = ln(2) / semivida_segundos`.
+
+| capa         | semivida   | tasa (1/s)       |
+|--------------|------------|------------------|
+| emocion      | 1 hora     | ln(2) / 3600     |
+| estado_animo | 1 día      | ln(2) / 86400    |
+| sentimiento  | no decae   | —                |
+
+Cuando la intensidad cae por debajo del umbral de corte (`0.01`) se fuerza a `0.0`
+y el `emocion_id` se limpia a `"neutro"`. Esto evita el estado inconsistente de
+tener un código de emoción activo con intensidad efectivamente nula.
+
+**El decaimiento no colapsa al neutro de golpe.** Cuando la intensidad de `emocion` baja, su contribución al vector compuesto disminuye y el `estado_animo` gana peso relativo. El vector resultante **deriva naturalmente** hacia donde está el estado de ánimo.
 
 Esto produce comportamiento emergente correcto:
 - Si el estado de ánimo es positivo, el personaje se recupera de emociones negativas de forma natural.
@@ -77,10 +95,9 @@ El LLM recibe: *"el personaje siente frustración"* — no números.
 
 ## Pendiente de documentar
 
-- Tasas de decaimiento concretas por capa (¿función lineal? ¿exponencial?)
 - Cómo los eventos modifican la intensidad de cada capa (¿fórmula de impacto?)
 - Cómo la `importancia` de un RECUERDO decae y se reactiva
-- Cómo `confianza`, `afecto`, `familiaridad` y `tension` en RELACION se actualizan tras un evento
+- Cómo `confianza`, `afecto`, `familiaridad`, `tension` y `disposicion` en RELACION se actualizan tras un evento
 
 ---
 
@@ -109,6 +126,132 @@ Cuando el sistema registra un dato con `origen: "sistema"` o `origen: "usuario_e
 
 Si al extraer un dato el LLM detecta que ya existe una entrada con la misma `clave`, el sistema debe resolver el conflicto comparando `confianza_final` de ambos registros y conservando el de mayor confianza, o marcando ambos para revisión si la diferencia es pequeña.
 
+
+---
+
+## Campos `_delta` en RELACION
+
+### Propósito
+
+Los campos `confianza_delta`, `afecto_delta` y `disposicion_delta` capturan la **tasa de cambio reciente** de su métrica. Un valor de `0.5` en `afecto` significa cosas distintas si lleva tres eventos subiendo o si acaba de caer desde `0.8`. El delta permite al sistema distinguir ambas situaciones y transmitirlas al LLM en lenguaje natural.
+
+### Cálculo
+
+Cada vez que un evento modifica una métrica, su delta se recalcula como **media exponencial ponderada** de los cambios recientes:
+
+```
+cambio_nuevo  = valor_nuevo − valor_anterior
+delta_nuevo   = delta_anterior × α + cambio_nuevo × (1 − α)
+```
+
+`α` es el factor de suavizado (`0.0 – 1.0`). Un `α` alto da más peso al historial; uno bajo reacciona más rápido al cambio inmediato. Valor de referencia: `α = 0.6`. Se ajusta durante implementación.
+
+El delta **no decae solo con el tiempo** — solo cambia cuando hay un evento que modifica la métrica. Si la relación está estancada, el delta refleja el último impulso que tuvo.
+
+### Uso
+
+**Contexto para el LLM.** Antes de generar una respuesta, el sistema convierte los deltas a lenguaje natural:
+
+```
+afecto = 0.5,  afecto_delta > +0.10  → "el afecto está en 0.5 y creciendo con fuerza"
+afecto = 0.5,  afecto_delta ≈ 0      → "el afecto está en 0.5 y estable"
+afecto = 0.5,  afecto_delta < −0.10  → "el afecto está en 0.5 y en declive"
+```
+
+Los umbrales de conversión (cuándo es "estable" vs "creciendo") se definen durante implementación.
+
+**Cálculo de `interes_actual`.** Un `afecto_delta` o `disposicion_delta` negativo significativo puede penalizar el interés de contacto aunque los valores base sean aceptables — ver sección `interes_actual`.
+
+---
+
+## `interes_actual`
+
+Valor calculado en tiempo real — **no se persiste**. El sistema lo computa cada vez que necesita decidir si el personaje toma iniciativa o con qué energía responde.
+
+### Fórmula
+
+```
+factor_tiempo  = 1.0 − e^(−horas_sin_hablar / τ)     [τ = 24.0 por defecto]
+
+interes_actual = (
+    disposicion                    × 0.50 +
+    valencia_estado_animo_norm     × 0.35 +
+    factor_tiempo                  × 0.15
+)
+```
+
+`valencia_estado_animo_norm` es la coordenada `valencia` del `estado_animo_id` actual, normalizada a `[0.0, 1.0]` con `(valencia + 1.0) / 2.0`.
+
+`factor_tiempo` usa una curva exponencial que sube rápido en las primeras horas y se satura cerca de `1.0` — pocas horas sin hablar ya generan impulso, pero pasar de 72 h no añade mucho más. `τ` se ajusta durante implementación.
+
+### Interpretación
+
+```
+interes_actual < 0.25   → el personaje evita o ignora el contacto
+0.25 – 0.50             → responde si el usuario escribe, sin energía
+0.50 – 0.75             → disposición normal
+> 0.75                  → puede tomar iniciativa
+```
+
+Los umbrales exactos se ajustan durante implementación.
+
+### Relación con los `_delta`
+
+Un `disposicion_delta` o `afecto_delta` muy negativo puede aplicar una penalización adicional sobre `interes_actual` aunque los valores base sean razonables. La fórmula exacta de esa penalización se define al implementar — el principio es que la dirección del cambio tiene peso propio.
+
+---
+
+## Velocidad de cambio en métricas de RELACION
+
+### Principio
+
+El rango `0.0 – 1.0` de las métricas de RELACION no implica que sea fácil llegar a los extremos. La velocidad a la que se mueven está controlada por dos mecanismos combinados: un **cap por tipo de evento** que limita el impacto máximo según la naturaleza del evento, y una **resistencia creciente en los extremos** que hace cada vez más difícil acercarse a `0.0` o `1.0`.
+
+### Mecanismo 1 — Cap de impacto por tipo de evento
+
+Cada tipo de evento tiene un impacto máximo que no puede superar, independientemente de lo bien o mal que haya ido:
+
+```
+evento cotidiano        → cap ±0.03   (conversación normal, mensaje breve)
+evento significativo    → cap ±0.10   (conversación larga y positiva, discusión real)
+evento extraordinario   → sin cap     (confesión, promesa importante, traición, ruptura)
+```
+
+La clasificación de cada TIPO_EVENTO en una de estas tres categorías se define al poblar el catálogo durante implementación.
+
+### Mecanismo 2 — Resistencia en los extremos
+
+Antes de aplicar un cambio, el sistema lo escala según la posición actual de la métrica. El cambio es más fácil en el centro (`0.5`) y más difícil cerca de `0.0` o `1.0`:
+
+```
+resistencia  = 4 × valor × (1 − valor)     ← máxima (1.0) en valor=0.5, mínima (0.0) en extremos
+impacto_real = impacto_base × resistencia
+```
+
+Ejemplo con `afecto = 0.9` e `impacto_base = +0.10`:
+
+```
+resistencia  = 4 × 0.9 × 0.1 = 0.36
+impacto_real = 0.10 × 0.36   = 0.036
+```
+
+El mismo evento que en `afecto = 0.5` movería `0.10` completo, en `afecto = 0.9` solo mueve `0.036`. Llegar a `1.0` requiere muchos eventos extraordinarios sostenidos.
+
+La resistencia aplica igual para subidas y bajadas — perder el último rastro de afecto también cuesta.
+
+### Orden de aplicación
+
+```
+1. Calcular impacto_base del evento
+2. Aplicar cap según tipo de evento   → impacto_capped
+3. Aplicar resistencia de extremos    → impacto_real
+4. Actualizar valor: nuevo = clamp(actual + impacto_real, 0.0, 1.0)
+5. Recalcular _delta con el cambio real aplicado
+```
+
+### Métricas afectadas
+
+Este mecanismo aplica a `confianza`, `afecto`, `familiaridad`, `tension` y `disposicion`. Los campos `_delta` usan el `impacto_real` (post-resistencia) para su cálculo, no el `impacto_base`.
 
 ---
 

@@ -1,8 +1,8 @@
 [
-  {"codigo": "interaccion",   "nombre": "Interacción",      "descripcion": "Conversación o contacto general"},
-  {"codigo": "cambio_etapa",  "nombre": "Cambio de etapa",  "descripcion": "Transición en la etapa de la relación"},
-  {"codigo": "conflicto",     "nombre": "Conflicto",        "descripcion": "Tensión o desacuerdo relevante"},
-  {"codigo": "reconciliacion","nombre": "Reconciliación",   "descripcion": "Resolución de un conflicto previo"},
-  {"codigo": "confesion",     "nombre": "Confesión",        "descripcion": "Revelación emocional importante"},
-  {"codigo": "promesa",       "nombre": "Promesa",          "descripcion": "Compromiso entre los dos"}
+  {"codigo": "interaccion",    "nombre": "Interacción",      "descripcion": "Conversación o contacto general",          "categoria": "cotidiano"},
+  {"codigo": "cambio_etapa",   "nombre": "Cambio de etapa",  "descripcion": "Transición en la etapa de la relación",    "categoria": "significativo"},
+  {"codigo": "conflicto",      "nombre": "Conflicto",        "descripcion": "Tensión o desacuerdo relevante",           "categoria": "significativo"},
+  {"codigo": "reconciliacion", "nombre": "Reconciliación",   "descripcion": "Resolución de un conflicto previo",        "categoria": "significativo"},
+  {"codigo": "confesion",      "nombre": "Confesión",        "descripcion": "Revelación emocional importante",          "categoria": "extraordinario"},
+  {"codigo": "promesa",        "nombre": "Promesa",          "descripcion": "Compromiso entre los dos",                 "categoria": "extraordinario"}
 ]

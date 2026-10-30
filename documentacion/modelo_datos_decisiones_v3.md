@@ -64,6 +64,29 @@ Campo que describiría el espectro introversión/extroversión de forma explíci
 
 ## Decisiones
 
+### Por qué el rango sigue siendo `0.0 – 1.0` y no se amplió a `0 – 100`
+
+Ampliar el rango es matemáticamente equivalente a reducir el impacto de cada evento en la misma proporción — no resuelve nada, solo obliga a reescribir todas las fórmulas, comparaciones y umbrales del sistema. El problema real era la velocidad de cambio, no la resolución numérica. Se resolvió con dos mecanismos en la lógica interna: cap de impacto por tipo de evento y resistencia creciente en los extremos. Ver lógica interna, sección "Velocidad de cambio en métricas de RELACION".
+
+### Por qué `disposicion` es un campo persistente y no calculado
+
+Se evaluó calcular la disposición del personaje al contacto en tiempo real a partir de `afecto`, `estado_animo` y tiempo sin hablar, sin persistirla. Se descartó porque perdería la noción de que hay personajes que *por historia de la relación* buscan o evitan el contacto independientemente de su estado emocional inmediato. Un personaje puede estar de buen humor y aun así no querer hablar con alguien específico por razones acumuladas — esa tendencia estructural no se puede derivar del estado puntual.
+
+La solución adoptada es un híbrido: `disposicion` persiste como tendencia base lenta (solo la mueven eventos reales), y `interes_actual` se calcula al vuelo combinando `disposicion`, el estado de ánimo presente y el tiempo sin hablar. Ver lógica interna.
+
+### Por qué los `_delta` solo se añaden a `confianza`, `afecto` y `disposicion`
+
+Los cinco campos de RELACION se evaluaron para añadirles `_delta`. Se descartó para `familiaridad` y `tension` por razones distintas:
+
+- `familiaridad` — en la práctica solo sube; retrocede solo en casos extremos (olvido, distanciamiento largo). Una tendencia negativa sostenida en familiaridad sería señal de un problema de diseño más que un estado normal a modelar.
+- `tension` — ya tiene carácter direccional implícito: un valor alto *es* la señal de alarma. No necesita delta para transmitir urgencia al LLM — el valor en sí lo hace.
+
+`confianza`, `afecto` y `disposicion` son los campos donde la dirección del cambio tiene mayor impacto en el tono relacional y en la decisión de iniciativa, por lo que son los que justifican el campo adicional.
+
+### Por qué el delta usa media exponencial ponderada y no valor anterior
+
+Se evaluó guardar simplemente el valor anterior de cada métrica (`afecto_anterior`) y calcular la tendencia como la diferencia. Se descartó porque captura solo el último salto — un cambio de `0.5 → 0.52` después de diez eventos bajando daría delta positivo, lo que sería engañoso. La media exponencial acumula el historial de dirección reciente con decaimiento natural, produciendo una señal más robusta y menos ruidosa.
+
 ### Por qué el perfil psicológico en lugar de sliders en PERSONAJE
 
 El modelo anterior proponía parámetros numéricos del tipo `humor: 0.7`, `afecto: 0.8`. El problema de ese enfoque es que el LLM decide qué significa cada valor y lo interpreta con sus sesgos de entrenamiento, produciendo personajes planos y estereotípicos.

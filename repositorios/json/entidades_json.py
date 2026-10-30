@@ -116,9 +116,13 @@ def _dict_a_relacion(d: dict) -> Relacion:
         usuario_id=d["usuario_id"],
         etapa=d["etapa"],
         confianza=d["confianza"],
+        confianza_delta=d.get("confianza_delta", 0.0),
         afecto=d["afecto"],
+        afecto_delta=d.get("afecto_delta", 0.0),
         familiaridad=d["familiaridad"],
         tension=d["tension"],
+        disposicion=d.get("disposicion", 0.5),
+        disposicion_delta=d.get("disposicion_delta", 0.0),
     )
 
 

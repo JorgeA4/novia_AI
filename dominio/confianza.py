@@ -10,18 +10,20 @@ Regla: este módulo no importa nada de persistencia, interfaz ni LLM.
 
 from __future__ import annotations
 
+from dominio.configuracion import cfg
 from dominio.modelos import PerfilUsuario
 
 
 # ---------------------------------------------------------------------------
-# Factores de origen — constantes del sistema, no parámetros
+# Factores de origen — construidos desde configuración
 # ---------------------------------------------------------------------------
 
-FACTORES_ORIGEN: dict[str, float] = {
-    "usuario_explicito": 1.0,
-    "sistema": 1.0,
-    "llm": 0.7,
-}
+def _factores_origen() -> dict[str, float]:
+    return {
+        "usuario_explicito": 1.0,
+        "sistema": 1.0,
+        "llm": cfg.confianza_llm.penalizacion_inferencia,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -32,14 +34,15 @@ def calcular_confianza_final(confianza_llm: float, origen: str) -> float:
     """
     confianza_final = confianza_llm × factor_origen
 
-    Factores:
+    Factores (leídos de configuracion.json):
         "usuario_explicito" → × 1.0  (sin penalización)
         "sistema"           → × 1.0  (sin penalización)
-        "llm"               → × 0.7  (penalización por inferencia)
+        "llm"               → × cfg.confianza_llm.penalizacion_inferencia
     """
-    factor = FACTORES_ORIGEN.get(origen)
+    factores = _factores_origen()
+    factor = factores.get(origen)
     if factor is None:
-        raise ValueError(f"Origen desconocido: '{origen}'. Valores válidos: {list(FACTORES_ORIGEN)}")
+        raise ValueError(f"Origen desconocido: '{origen}'. Valores válidos: {list(factores)}")
     return confianza_llm * factor
 
 
@@ -52,11 +55,10 @@ def confianza_final_de(entrada: PerfilUsuario) -> float:
 # Resolución de duplicados
 # ---------------------------------------------------------------------------
 
+# El umbral de diferencia mínima no está en configuracion.json porque es
+# una constante operativa de resolución de conflictos, no un parámetro de diseño.
+# Se define aquí para que sea visible y modificable localmente si se necesita.
 UMBRAL_DIFERENCIA_MINIMA: float = 0.1
-"""
-Si la diferencia de confianza_final entre dos entradas con la misma clave
-es menor que este umbral, se considera ambigua y se marca para revisión.
-"""
 
 
 def resolver_duplicado(

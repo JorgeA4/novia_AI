@@ -113,16 +113,24 @@ ultima_interaccion      → DATETIME
 
 Vínculo entre un personaje y un usuario. Evoluciona con el tiempo y con los eventos.
 
+Los campos `_delta` capturan la tasa de cambio reciente de su métrica asociada — calculada como media exponencial de los últimos cambios. Un delta positivo indica crecimiento sostenido; negativo, declive. Permiten distinguir un valor de 0.5 que va en subida de uno que va en bajada, lo que afecta tanto al tono de respuesta del personaje como al cálculo de `interes_actual`.
+
+`disposicion` representa la tendencia base del personaje a buscar o recibir contacto con este usuario. No es aprecio (`afecto`) ni conocimiento (`familiaridad`), sino la tracción hacia el encuentro. `interes_actual` se calcula a partir de `disposicion`, el estado emocional presente y el tiempo sin hablar — ver lógica interna.
+
 ### Campos
 
-num           → INT (PK)
-personaje_id  → INT (FK -> PERSONAJE.num)
-usuario_id    → INT (FK -> USUARIO.num)
-etapa         → STR (FK -> ETAPA_RELACION.codigo)
-confianza     → FLOAT (0.0 – 1.0)
-afecto        → FLOAT (0.0 – 1.0)
-familiaridad  → FLOAT (0.0 – 1.0)
-tension       → FLOAT (0.0 – 1.0)
+num                 → INT (PK)
+personaje_id        → INT (FK -> PERSONAJE.num)
+usuario_id          → INT (FK -> USUARIO.num)
+etapa               → STR (FK -> ETAPA_RELACION.codigo)
+confianza           → FLOAT (0.0 – 1.0)
+confianza_delta     → FLOAT (-1.0 – 1.0)
+afecto              → FLOAT (0.0 – 1.0)
+afecto_delta        → FLOAT (-1.0 – 1.0)
+familiaridad        → FLOAT (0.0 – 1.0)
+tension             → FLOAT (0.0 – 1.0)
+disposicion         → FLOAT (0.0 – 1.0)
+disposicion_delta   → FLOAT (-1.0 – 1.0)
 
 ------------------------------------------------------
 
@@ -250,3 +258,15 @@ Catálogo de los tipos de evento reconocidos por el sistema. `descripcion` es so
 codigo      → STR (PK)
 nombre      → STR
 descripcion → STR
+categoria   → STR  CHECK ("cotidiano" | "significativo" | "extraordinario")
+
+### Semántica de `categoria`
+
+Determina el cap de velocidad de cambio que se aplica cuando el evento
+actualiza las métricas de RELACION (ver logica_interna.md §Velocidad de cambio):
+
+| categoria       | cap por turno | casos típicos                              |
+|-----------------|---------------|--------------------------------------------|
+| cotidiano       | ±0.03         | mensaje breve, conversación normal         |
+| significativo   | ±0.10         | conversación larga, discusión real         |
+| extraordinario  | sin límite    | confesión, promesa importante, traición    |

@@ -30,13 +30,15 @@ from aplicacion.gestor_contexto import (
     construir_payload,
     construir_sistema,
 )
-from dominio.emociones import aplicar_inercia_estado_animo, decaer_estado
+from dominio.configuracion import cfg
+from dominio.emociones import aplicar_presion_emocion_sobre_animo, decaer_estado
 from dominio.modelos import Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion
 from dominio.relacion import (
     CondicionTransicion,
     DeltasRelacion,
     aplicar_deltas_turno,
     buscar_transicion_elegible,
+    calcular_delta_disposicion,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
 from repositorios.json.factoria import Repositorios
@@ -96,10 +98,6 @@ CONDICIONES_TRANSICION: list[CondicionTransicion] = [
     ),
 ]
 
-# Días de vigencia por defecto para un recuerdo extraído por el LLM
-_VIGENCIA_RECUERDO_DIAS: int = 30
-
-
 # ---------------------------------------------------------------------------
 # Resultado del turno
 # ---------------------------------------------------------------------------
@@ -133,6 +131,7 @@ class GestorTurno:
         personaje = repos.personaje.obtener(relacion.personaje_id)
         usuario = repos.usuario.obtener(relacion.usuario_id)
         estado = repos.estado.obtener(relacion_id)
+        catalogo_emociones = repos.catalogos.obtener_emociones()
 
         # --- 2. Guardar mensaje del usuario ---
         repos.mensaje.guardar(Mensaje(
@@ -143,13 +142,12 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 3. Decaimiento emocional ---
+        # --- 3. Decaimiento emocional (incluye deriva del sentimiento — Brecha 3) ---
         segundos = (ahora - estado.ultima_interaccion).total_seconds()
         if segundos > 0:
-            estado = decaer_estado(estado, segundos)
+            estado = decaer_estado(estado, segundos, catalogo_emociones)
 
         # --- 4. Construir contexto ---
-        catalogo_emociones = repos.catalogos.obtener_emociones()
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
         mbtis = {m.codigo: m for m in repos.catalogos.obtener_mbti()}
         eneagramas = {e.codigo: e for e in repos.catalogos.obtener_eneagramas()}
@@ -203,9 +201,13 @@ class GestorTurno:
         animo_id = str(turno.get("estado_animo_id", "")).strip()
         animo_int = max(0.0, min(1.0, float(turno.get("estado_animo_intensidad", 0.3))))
 
-        if emo_id in codigos_emocion and animo_id in codigos_estado_animo:
-            animo_id_final, animo_int_final = aplicar_inercia_estado_animo(
-                estado, animo_id, animo_int, catalogo_emociones
+        if emo_id in codigos_emocion:
+            # Brecha 1 + 2: la emoción empuja al estado_animo con presión acumulativa
+            # moderada por el sentimiento. El estado_animo sugerido por el LLM no se
+            # descarta — se usa como señal de referencia para verificar coherencia, pero
+            # la posición real la decide la presión sobre el espacio de Russell.
+            animo_id_final, animo_int_final = aplicar_presion_emocion_sobre_animo(
+                estado, emo_id, emo_int, catalogo_emociones
             )
             estado = replace(
                 estado,
@@ -228,7 +230,16 @@ class GestorTurno:
             confianza=_extraer_delta("confianza"),
             familiaridad=_extraer_delta("familiaridad"),
             tension=_extraer_delta("tension"),
+            # disposicion se deriva de las tendencias de afecto y confianza
+            # tras aplicar los deltas anteriores — se calcula abajo
         )
+
+        # Aplicar primero los deltas del LLM para que afecto_delta y confianza_delta
+        # reflejen el turno actual antes de calcular el impulso de disposicion
+        relacion = aplicar_deltas_turno(relacion, deltas)
+        delta_disposicion = calcular_delta_disposicion(relacion)
+        deltas_disposicion = DeltasRelacion(disposicion=delta_disposicion)
+        relacion = aplicar_deltas_turno(relacion, deltas_disposicion)
 
         impacto_neto = (deltas.afecto + deltas.confianza + deltas.familiaridad - deltas.tension) / 4.0
         repos.evento.guardar(Evento(
@@ -239,17 +250,17 @@ class GestorTurno:
                 f"Interacción: afecto={deltas.afecto:+.2f} "
                 f"conf={deltas.confianza:+.2f} "
                 f"fam={deltas.familiaridad:+.2f} "
-                f"tens={deltas.tension:+.2f}"
+                f"tens={deltas.tension:+.2f} "
+                f"disp={delta_disposicion:+.4f}"
             ),
             fecha=ahora,
             impacto=impacto_neto,
             resuelto=True,
         ))
-        relacion = aplicar_deltas_turno(relacion, deltas)
         repos.relacion.guardar(relacion)
 
         # --- 8b. Persistir recuerdos extraídos ---
-        vigencia = ahora + timedelta(days=_VIGENCIA_RECUERDO_DIAS)
+        vigencia = ahora + timedelta(days=cfg.recuerdos.vigencia_dias)
         for r in turno.get("recuerdos", []):
             try:
                 repos.recuerdo.guardar(Recuerdo(
@@ -330,7 +341,7 @@ class GestorTurno:
                         f"{etapa_anterior} → {etapa_nueva}"
                     ),
                     fecha=ahora,
-                    impacto=0.2,
+                    impacto=cfg.transicion_etapa.impacto_evento,
                     resuelto=True,
                     etapa_desde_id=etapa_anterior,
                     etapa_hasta_id=etapa_nueva,
@@ -342,7 +353,10 @@ class GestorTurno:
                     estado = replace(
                         estado,
                         sentimiento_id=sentimiento_nuevo.codigo,
-                        sentimiento_intensidad=min(1.0, estado.sentimiento_intensidad + 0.2),
+                        sentimiento_intensidad=min(
+                            1.0,
+                            estado.sentimiento_intensidad + cfg.transicion_etapa.delta_sentimiento_al_avanzar,
+                        ),
                     )
                     repos.estado.guardar(estado)
 
