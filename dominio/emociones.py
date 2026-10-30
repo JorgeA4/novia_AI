@@ -116,6 +116,10 @@ def calcular_emocion_actual(estado: Estado, catalogo: list[Emocion]) -> Emocion:
     A partir del Estado persistido y el catálogo completo de emociones,
     calcula el vector compuesto y devuelve la emoción más cercana.
 
+    El vector compuesto integra las tres capas ponderadas (0.50/0.35/0.15),
+    por lo que el resultado puede ser cualquier emoción del catálogo
+    independientemente de su capa. Se compara contra todo el catálogo.
+
     Esta es la función que usa la capa de aplicación antes de construir
     el contexto para el LLM.
     """
@@ -129,8 +133,77 @@ def calcular_emocion_actual(estado: Estado, catalogo: list[Emocion]) -> Emocion:
 
     compuesto = calcular_estado_compuesto(vector_emocion, vector_estado_animo, vector_sentimiento)
 
-    # La emoción resultante puede ser de cualquier capa — buscamos en todo el catálogo
-    return detectar_emocion_cercana(compuesto, catalogo, capa="cualquiera")
+    # Buscar en todo el catálogo sin filtrar por capa: el vector compuesto
+    # ya representa la síntesis de las tres capas y puede aterrizar en cualquiera.
+    return min(
+        catalogo,
+        key=lambda e: distancia_euclidiana(
+            compuesto,
+            Vector2D(e.valencia, e.activacion),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Inercia emocional — actualización con resistencia al cambio
+# ---------------------------------------------------------------------------
+
+# Factor de inercia del estado_animo: cuánto se mueve hacia el nuevo valor en un turno.
+# 0.25 → el estado_animo recorre el 25% del camino hacia el nuevo valor por turno.
+# Esto significa que para cambiar completamente necesita ~4 turnos consecutivos
+# con la misma señal, lo que refleja que el tono de fondo tarda horas/días en cambiar.
+INERCIA_ESTADO_ANIMO: float = 0.25
+
+
+def aplicar_inercia_estado_animo(
+    estado: Estado,
+    nuevo_animo_id: str,
+    nueva_intensidad: float,
+    catalogo: list[Emocion],
+) -> tuple[str, float]:
+    """
+    Calcula el nuevo estado_animo aplicando inercia: en lugar de reemplazar
+    directamente, interpola en el espacio de Russell hacia el nuevo valor.
+
+    La interpolación ocurre en dos dimensiones:
+      1. Posición vectorial: mezcla el vector actual con el nuevo por INERCIA.
+      2. Intensidad: mezcla la intensidad actual con la nueva por INERCIA.
+      3. El código resultante es la emoción de capa estado_animo más cercana
+         al vector interpolado.
+
+    Si el nuevo estado_animo es igual al actual, solo actualiza la intensidad
+    con inercia (sin cambio de código).
+
+    Devuelve (animo_id_resultante, intensidad_resultante).
+    """
+    actual = _buscar_en_catalogo(catalogo, estado.estado_animo_id)
+    nuevo = _buscar_en_catalogo(catalogo, nuevo_animo_id)
+
+    # Interpolar posición en el espacio de Russell
+    valencia_interpolada = (
+        actual.valencia * (1 - INERCIA_ESTADO_ANIMO)
+        + nuevo.valencia * INERCIA_ESTADO_ANIMO
+    )
+    activacion_interpolada = (
+        actual.activacion * (1 - INERCIA_ESTADO_ANIMO)
+        + nuevo.activacion * INERCIA_ESTADO_ANIMO
+    )
+    vector_interpolado = Vector2D(valencia_interpolada, activacion_interpolada)
+
+    # Buscar la emoción de estado_animo más cercana al vector interpolado
+    candidatas = [e for e in catalogo if e.capa in ("estado_animo", "cualquiera")]
+    animo_resultante = min(
+        candidatas,
+        key=lambda e: distancia_euclidiana(vector_interpolado, Vector2D(e.valencia, e.activacion)),
+    )
+
+    # Interpolar intensidad
+    intensidad_resultante = (
+        estado.estado_animo_intensidad * (1 - INERCIA_ESTADO_ANIMO)
+        + nueva_intensidad * INERCIA_ESTADO_ANIMO
+    )
+
+    return animo_resultante.codigo, max(0.0, min(1.0, intensidad_resultante))
 
 
 # ---------------------------------------------------------------------------

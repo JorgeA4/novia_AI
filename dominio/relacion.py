@@ -87,12 +87,14 @@ def condicion_cumplida(relacion: Relacion, condicion: CondicionTransicion) -> bo
 
 # Umbral a partir del cual una transición elegible se activa por impulso
 # automático sin necesidad de evento significativo.
-# TODO: afinar este valor durante la implementación.
 UMBRAL_IMPULSO_AUTOMATICO: float = 0.15
 """
 Si todos los campos de la relación superan sus umbrales por este margen,
 la transición se activa por impulso automático.
 """
+
+# Tolerancia para comparaciones de punto flotante
+_EPSILON: float = 1e-9
 
 
 def evaluar_transicion(
@@ -131,18 +133,19 @@ def _cumple_con_margen(
 ) -> bool:
     """
     Comprueba si todos los campos superan sus umbrales por al menos `margen`.
+    Usa _EPSILON para evitar falsos negativos por precisión de punto flotante.
     """
     if condicion.confianza_min is not None:
-        if relacion.confianza < condicion.confianza_min + margen:
+        if relacion.confianza < condicion.confianza_min + margen - _EPSILON:
             return False
     if condicion.afecto_min is not None:
-        if relacion.afecto < condicion.afecto_min + margen:
+        if relacion.afecto < condicion.afecto_min + margen - _EPSILON:
             return False
     if condicion.familiaridad_min is not None:
-        if relacion.familiaridad < condicion.familiaridad_min + margen:
+        if relacion.familiaridad < condicion.familiaridad_min + margen - _EPSILON:
             return False
     if condicion.tension_max is not None:
-        if relacion.tension > condicion.tension_max - margen:
+        if relacion.tension > condicion.tension_max - margen + _EPSILON:
             return False
     return True
 

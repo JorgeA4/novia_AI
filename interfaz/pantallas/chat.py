@@ -131,14 +131,25 @@ class PantallaChat(Screen):
         estado = repos.estado.obtener(self._relacion_id)
         catalogo = repos.catalogos.obtener_emociones()
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
+        catalogo_idx = {e.codigo: e for e in catalogo}
 
         emocion_actual = calcular_emocion_actual(estado, catalogo)
         etapa_nombre = etapas.get(relacion.etapa, None)
         etapa_str = etapa_nombre.nombre if etapa_nombre else relacion.etapa
 
+        # Nombres legibles de estado_animo y sentimiento desde el catálogo
+        animo_nombre = catalogo_idx.get(estado.estado_animo_id)
+        animo_str = animo_nombre.nombre if animo_nombre else estado.estado_animo_id
+        sent_nombre = catalogo_idx.get(estado.sentimiento_id)
+        sent_str = sent_nombre.nombre if sent_nombre else estado.sentimiento_id
+
         self.query_one(IndicadorEstado).actualizar(
             etapa=etapa_str,
             emocion=emocion_actual.nombre,
+            estado_animo=animo_str,
+            estado_animo_int=estado.estado_animo_intensidad,
+            sentimiento=sent_str,
+            sentimiento_int=estado.sentimiento_intensidad,
             confianza=relacion.confianza,
             afecto=relacion.afecto,
             familiaridad=relacion.familiaridad,
