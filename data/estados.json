@@ -1,0 +1,12 @@
+[
+  {
+    "relacion_id": 1,
+    "emocion_id": "neutro",
+    "emocion_intensidad": 0.3,
+    "estado_animo_id": "neutro",
+    "estado_animo_intensidad": 0.2,
+    "sentimiento_id": "neutro",
+    "sentimiento_intensidad": 0.1,
+    "ultima_interaccion": "2026-10-30T00:31:30.203025"
+  }
+]

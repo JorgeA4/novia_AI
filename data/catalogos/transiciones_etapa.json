@@ -1,0 +1,13 @@
+[
+  {"desde_id": "desconocidos",      "hasta_id": "conocidos",         "tipo": "avance"},
+  {"desde_id": "conocidos",         "hasta_id": "amigos",            "tipo": "avance"},
+  {"desde_id": "amigos",            "hasta_id": "amigos_cercanos",   "tipo": "avance"},
+  {"desde_id": "amigos_cercanos",   "hasta_id": "interes_romantico", "tipo": "avance"},
+  {"desde_id": "interes_romantico", "hasta_id": "pareja",            "tipo": "avance"},
+  {"desde_id": "amigos",            "hasta_id": "conocidos",         "tipo": "retroceso"},
+  {"desde_id": "amigos_cercanos",   "hasta_id": "amigos",            "tipo": "retroceso"},
+  {"desde_id": "interes_romantico", "hasta_id": "amigos_cercanos",   "tipo": "retroceso"},
+  {"desde_id": "pareja",            "hasta_id": "distanciamiento",   "tipo": "retroceso"},
+  {"desde_id": "pareja",            "hasta_id": "ruptura",           "tipo": "ruptura"},
+  {"desde_id": "distanciamiento",   "hasta_id": "ruptura",           "tipo": "ruptura"}
+]

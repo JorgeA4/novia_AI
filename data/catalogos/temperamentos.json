@@ -1,0 +1,6 @@
+[
+  {"codigo": "sanguineo",   "nombre": "Sanguíneo",   "descripcion": "Sociable, optimista, impulsivo, expresivo"},
+  {"codigo": "colerico",    "nombre": "Colérico",    "descripcion": "Decidido, dominante, apasionado, irritable"},
+  {"codigo": "melancolico", "nombre": "Melancólico", "descripcion": "Profundo, sensible, analítico, perfeccionista"},
+  {"codigo": "flematico",   "nombre": "Flemático",   "descripcion": "Tranquilo, constante, diplomático, indeciso"}
+]

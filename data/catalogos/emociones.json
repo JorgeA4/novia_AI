@@ -1,0 +1,21 @@
+[
+  {"codigo": "neutro",       "nombre": "neutral",       "valencia":  0.0,  "activacion":  0.0,  "capa": "cualquiera",   "descripcion": "Estado emocional sin carga particular"},
+  {"codigo": "alegria",      "nombre": "alegría",       "valencia":  0.8,  "activacion":  0.6,  "capa": "emocion",      "descripcion": "Respuesta positiva y energética"},
+  {"codigo": "entusiasmo",   "nombre": "entusiasmo",    "valencia":  0.7,  "activacion":  0.9,  "capa": "emocion",      "descripcion": "Energía positiva intensa"},
+  {"codigo": "satisfaccion", "nombre": "satisfacción",  "valencia":  0.6,  "activacion":  0.2,  "capa": "emocion",      "descripcion": "Sensación de logro o cumplimiento"},
+  {"codigo": "sorpresa",     "nombre": "sorpresa",      "valencia":  0.2,  "activacion":  0.8,  "capa": "emocion",      "descripcion": "Reacción ante algo inesperado"},
+  {"codigo": "nerviosismo",  "nombre": "nerviosismo",   "valencia": -0.2,  "activacion":  0.7,  "capa": "emocion",      "descripcion": "Ansiedad leve ante incertidumbre"},
+  {"codigo": "incomodidad",  "nombre": "incomodidad",   "valencia": -0.4,  "activacion":  0.3,  "capa": "emocion",      "descripcion": "Malestar moderado"},
+  {"codigo": "enfado",       "nombre": "enfado",        "valencia": -0.7,  "activacion":  0.8,  "capa": "emocion",      "descripcion": "Reacción negativa intensa"},
+  {"codigo": "tristeza_aguda","nombre": "tristeza aguda","valencia": -0.8, "activacion": -0.3,  "capa": "emocion",      "descripcion": "Dolor emocional inmediato"},
+  {"codigo": "calma",        "nombre": "calma",         "valencia":  0.4,  "activacion": -0.5,  "capa": "estado_animo", "descripcion": "Tono tranquilo y estable"},
+  {"codigo": "buen_humor",   "nombre": "buen humor",    "valencia":  0.6,  "activacion":  0.3,  "capa": "estado_animo", "descripcion": "Disposición positiva de fondo"},
+  {"codigo": "melancolia",   "nombre": "melancolía",    "valencia": -0.4,  "activacion": -0.4,  "capa": "estado_animo", "descripcion": "Tristeza suave y reflexiva"},
+  {"codigo": "irritabilidad","nombre": "irritabilidad", "valencia": -0.5,  "activacion":  0.5,  "capa": "estado_animo", "descripcion": "Tendencia al enfado con poca provocación"},
+  {"codigo": "tristeza_fondo","nombre": "tristeza de fondo","valencia": -0.6,"activacion": -0.5,"capa": "estado_animo", "descripcion": "Tono bajo y apagado sostenido"},
+  {"codigo": "carino",       "nombre": "cariño",        "valencia":  0.7,  "activacion":  0.1,  "capa": "sentimiento",  "descripcion": "Afecto profundo acumulado"},
+  {"codigo": "amor",         "nombre": "amor",          "valencia":  0.9,  "activacion":  0.3,  "capa": "sentimiento",  "descripcion": "Sentimiento romántico profundo"},
+  {"codigo": "desconfianza", "nombre": "desconfianza",  "valencia": -0.5,  "activacion":  0.1,  "capa": "sentimiento",  "descripcion": "Recelo profundo acumulado"},
+  {"codigo": "resentimiento","nombre": "resentimiento", "valencia": -0.6,  "activacion":  0.2,  "capa": "sentimiento",  "descripcion": "Herida emocional sin resolver"},
+  {"codigo": "indiferencia", "nombre": "indiferencia",  "valencia":  0.0,  "activacion": -0.3,  "capa": "sentimiento",  "descripcion": "Ausencia de vínculo emocional"}
+]

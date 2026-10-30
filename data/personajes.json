@@ -1,0 +1,27 @@
+[
+  {
+    "num": 1,
+    "nombre": "Luna",
+    "descripcion": "Chica inteligente y algo reservada. Observadora, con humor sutil y mucha profundidad emocional. Le cuesta abrirse, pero cuando lo hace es completamente sincera.",
+    "historia": "Creció en un pueblo pequeño. Estudió literatura. Vive sola en la ciudad desde hace tres años y todavía le cuesta encontrar personas con quienes conectar de verdad.",
+    "valores": [
+      "honestidad",
+      "lealtad",
+      "profundidad"
+    ],
+    "gustos": [
+      "leer",
+      "música indie",
+      "el silencio cómodo",
+      "el café solo"
+    ],
+    "aversiones": [
+      "falsedad",
+      "superficialidad",
+      "el ruido innecesario"
+    ],
+    "mbti_id": "INFJ",
+    "eneagrama_id": "4w5",
+    "temperamento_id": "melancolico"
+  }
+]

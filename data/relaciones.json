@@ -1,0 +1,12 @@
+[
+  {
+    "num": 1,
+    "personaje_id": 1,
+    "usuario_id": 1,
+    "etapa": "desconocidos",
+    "confianza": 0.05,
+    "afecto": 0.05,
+    "familiaridad": 0.0,
+    "tension": 0.0
+  }
+]

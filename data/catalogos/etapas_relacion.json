@@ -1,0 +1,10 @@
+[
+  {"codigo": "desconocidos",       "nombre": "Desconocidos",        "descripcion": "No se conocen aún"},
+  {"codigo": "conocidos",          "nombre": "Conocidos",           "descripcion": "Han tenido contacto superficial"},
+  {"codigo": "amigos",             "nombre": "Amigos",              "descripcion": "Hay vínculo amistoso establecido"},
+  {"codigo": "amigos_cercanos",    "nombre": "Amigos cercanos",     "descripcion": "Confianza y afecto reales"},
+  {"codigo": "interes_romantico",  "nombre": "Interés romántico",   "descripcion": "Hay atracción mutua reconocida"},
+  {"codigo": "pareja",             "nombre": "Pareja",              "descripcion": "Relación romántica comprometida"},
+  {"codigo": "distanciamiento",    "nombre": "Distanciamiento",     "descripcion": "La relación se ha enfriado"},
+  {"codigo": "ruptura",            "nombre": "Ruptura",             "descripcion": "La relación ha terminado"}
+]

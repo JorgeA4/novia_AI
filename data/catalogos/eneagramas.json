@@ -1,0 +1,20 @@
+[
+  {"codigo": "1w9", "siglas": "1w9", "descripcion": "El perfeccionista — principios, contención, calma"},
+  {"codigo": "1w2", "siglas": "1w2", "descripcion": "El perfeccionista — principios, ayuda, calor"},
+  {"codigo": "2w1", "siglas": "2w1", "descripcion": "El ayudador — servicio, ideales, contención"},
+  {"codigo": "2w3", "siglas": "2w3", "descripcion": "El ayudador — servicio, imagen, ambición"},
+  {"codigo": "3w2", "siglas": "3w2", "descripcion": "El triunfador — logro, imagen, sociabilidad"},
+  {"codigo": "3w4", "siglas": "3w4", "descripcion": "El triunfador — logro, imagen, profundidad"},
+  {"codigo": "4w3", "siglas": "4w3", "descripcion": "El individualista — identidad, autenticidad, ambición"},
+  {"codigo": "4w5", "siglas": "4w5", "descripcion": "El individualista — identidad, autenticidad, retiro"},
+  {"codigo": "5w4", "siglas": "5w4", "descripcion": "El investigador — conocimiento, retiro, creatividad"},
+  {"codigo": "5w6", "siglas": "5w6", "descripcion": "El investigador — conocimiento, retiro, lealtad"},
+  {"codigo": "6w5", "siglas": "6w5", "descripcion": "El leal — seguridad, duda, retiro"},
+  {"codigo": "6w7", "siglas": "6w7", "descripcion": "El leal — seguridad, duda, entusiasmo"},
+  {"codigo": "7w6", "siglas": "7w6", "descripcion": "El entusiasta — placer, miedo al dolor, lealtad"},
+  {"codigo": "7w8", "siglas": "7w8", "descripcion": "El entusiasta — placer, miedo al dolor, poder"},
+  {"codigo": "8w7", "siglas": "8w7", "descripcion": "El desafiador — poder, control, entusiasmo"},
+  {"codigo": "8w9", "siglas": "8w9", "descripcion": "El desafiador — poder, control, calma"},
+  {"codigo": "9w8", "siglas": "9w8", "descripcion": "El pacificador — armonía, fusión, poder"},
+  {"codigo": "9w1", "siglas": "9w1", "descripcion": "El pacificador — armonía, fusión, principios"}
+]

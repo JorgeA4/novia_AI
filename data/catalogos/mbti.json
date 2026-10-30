@@ -1,0 +1,18 @@
+[
+  {"codigo": "INTJ", "siglas": "INTJ", "descripcion": "Arquitecto — estratégico, independiente, exigente"},
+  {"codigo": "INTP", "siglas": "INTP", "descripcion": "Pensador — analítico, reservado, ingenioso"},
+  {"codigo": "ENTJ", "siglas": "ENTJ", "descripcion": "Comandante — decidido, ambicioso, carismático"},
+  {"codigo": "ENTP", "siglas": "ENTP", "descripcion": "Debatidor — curioso, ingenioso, desafiante"},
+  {"codigo": "INFJ", "siglas": "INFJ", "descripcion": "Consejero — idealista, empático, profundo"},
+  {"codigo": "INFP", "siglas": "INFP", "descripcion": "Mediador — soñador, leal, con fuertes valores"},
+  {"codigo": "ENFJ", "siglas": "ENFJ", "descripcion": "Protagonista — carismático, altruista, inspirador"},
+  {"codigo": "ENFP", "siglas": "ENFP", "descripcion": "Activista — entusiasta, creativo, sociable"},
+  {"codigo": "ISTJ", "siglas": "ISTJ", "descripcion": "Logístico — responsable, metódico, confiable"},
+  {"codigo": "ISFJ", "siglas": "ISFJ", "descripcion": "Defensor — protector, leal, detallista"},
+  {"codigo": "ESTJ", "siglas": "ESTJ", "descripcion": "Ejecutivo — organizado, directo, decidido"},
+  {"codigo": "ESFJ", "siglas": "ESFJ", "descripcion": "Cónsul — atento, sociable, armónico"},
+  {"codigo": "ISTP", "siglas": "ISTP", "descripcion": "Virtuoso — práctico, curioso, independiente"},
+  {"codigo": "ISFP", "siglas": "ISFP", "descripcion": "Aventurero — artístico, flexible, sensible"},
+  {"codigo": "ESTP", "siglas": "ESTP", "descripcion": "Emprendedor — enérgico, directo, observador"},
+  {"codigo": "ESFP", "siglas": "ESFP", "descripcion": "Animador — espontáneo, entusiasta, divertido"}
+]
