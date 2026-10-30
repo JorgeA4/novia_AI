@@ -5,6 +5,7 @@ Operaciones:
     - Evaluar si una transición entre etapas es elegible según condiciones de umbral.
     - Determinar el modo de activación (permiso vs. impulso automático).
     - Aplicar el impacto de un evento sobre las métricas de RELACION.
+    - Aplicar deltas individuales por dimensión (afecto, confianza, familiaridad, tension).
 
 Regla: este módulo no importa nada de persistencia, interfaz ni LLM.
 
@@ -17,9 +18,29 @@ y los contratos; los valores placeholder se marcan con TODO.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from dominio.modelos import Evento, Relacion, TransicionEtapa
+
+
+# ---------------------------------------------------------------------------
+# Deltas individuales por dimensión
+# ---------------------------------------------------------------------------
+
+class DeltasRelacion(NamedTuple):
+    """
+    Variación independiente de cada métrica de RELACION para un turno.
+
+    Todos los valores están en el rango [-1.0, 1.0].
+    El resultado final se recorta siempre a [0.0, 1.0].
+
+    Permite que un turno suba confianza sin mover familiaridad, o que
+    suba tensión sin reducir afecto, etc.
+    """
+    afecto: float = 0.0
+    confianza: float = 0.0
+    familiaridad: float = 0.0
+    tension: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -162,23 +183,20 @@ def buscar_transicion_elegible(
 def aplicar_impacto_evento(relacion: Relacion, evento: Evento) -> Relacion:
     """
     Devuelve una nueva Relacion con las métricas actualizadas según el impacto
-    del evento.
+    escalar del evento.
 
-    Reglas actuales (TODO: reemplazar por fórmulas definitivas cuando el
-    diseño las especifique — ver logica_interna.md):
+    Usado para eventos especiales (cambio_etapa, conflictos) donde el sistema
+    genera un impacto global. Para turnos de conversación ordinarios usar
+    `aplicar_deltas_turno` que permite variación independiente por dimensión.
 
+    Reglas:
         impacto > 0  → sube afecto y confianza, baja tension
         impacto < 0  → baja afecto y confianza, sube tension
         familiaridad → sube siempre con cualquier evento (la interacción acumula)
-
-    El impacto se escala al 50% antes de aplicarse para evitar cambios
-    demasiado bruscos en una sola interacción. Todos los campos se recortan
-    al rango [0.0, 1.0].
     """
     magnitud = abs(evento.impacto)
     signo = 1.0 if evento.impacto >= 0 else -1.0
 
-    # TODO: reemplazar estas fórmulas por las definitivas
     delta_afecto = signo * magnitud * 0.5
     delta_confianza = signo * magnitud * 0.3
     delta_tension = -signo * magnitud * 0.4
@@ -190,6 +208,25 @@ def aplicar_impacto_evento(relacion: Relacion, evento: Evento) -> Relacion:
         confianza=_recortar(relacion.confianza + delta_confianza),
         tension=_recortar(relacion.tension + delta_tension),
         familiaridad=_recortar(relacion.familiaridad + delta_familiaridad),
+    )
+
+
+def aplicar_deltas_turno(relacion: Relacion, deltas: DeltasRelacion) -> Relacion:
+    """
+    Devuelve una nueva Relacion aplicando variaciones independientes por dimensión.
+
+    Cada delta viene directamente del LLM — puede ser positivo, negativo o cero
+    de forma completamente independiente al resto. Por ejemplo:
+        confianza +0.3, familiaridad 0.0, tension +0.2, afecto -0.1
+
+    Todos los resultados se recortan a [0.0, 1.0].
+    """
+    return replace(
+        relacion,
+        afecto=_recortar(relacion.afecto + deltas.afecto),
+        confianza=_recortar(relacion.confianza + deltas.confianza),
+        familiaridad=_recortar(relacion.familiaridad + deltas.familiaridad),
+        tension=_recortar(relacion.tension + deltas.tension),
     )
 
 

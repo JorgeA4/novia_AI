@@ -190,6 +190,22 @@ class PantallaChat(Screen):
             historial.mount(BurbujaMensaje("sistema", aviso))
             historial.scroll_end(animate=True)
 
+        # Indicador de deltas del turno en el historial
+        d = resultado.deltas_turno
+        partes = []
+        if abs(d.afecto) >= 0.05:
+            partes.append(f"afecto {d.afecto:+.2f}")
+        if abs(d.confianza) >= 0.05:
+            partes.append(f"confianza {d.confianza:+.2f}")
+        if abs(d.familiaridad) >= 0.05:
+            partes.append(f"familiaridad {d.familiaridad:+.2f}")
+        if abs(d.tension) >= 0.05:
+            partes.append(f"tensión {d.tension:+.2f}")
+        if partes:
+            aviso_deltas = "〜 " + "  |  ".join(partes)
+            historial.mount(BurbujaMensaje("sistema", aviso_deltas))
+            historial.scroll_end(animate=True)
+
         self._actualizar_panel_estado()
         self._mostrar_pensando(False)
         self._procesando = False
