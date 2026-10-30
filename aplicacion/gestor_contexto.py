@@ -62,6 +62,7 @@ def construir_sistema(
         - Emoción actual (nombre, no vectores)
         - Recuerdos relevantes
         - Datos conocidos del usuario (alta confianza)
+        - Instrucción de formato JSON unificado para la respuesta
     """
     emocion_actual = calcular_emocion_actual(estado, catalogo_emociones)
 
@@ -122,11 +123,39 @@ def construir_sistema(
         lineas = [f"  - {p.clave}: {p.valor}" for p in perfil_relevante]
         secciones.append(f"Lo que sabes de {nombre_usuario}:\n" + "\n".join(lineas))
 
-    # --- Instrucción de comportamiento ---
+    # --- Instrucción de formato de respuesta ---
+    codigos_emocion = ", ".join(
+        e.codigo for e in catalogo_emociones if e.capa in ("emocion", "cualquiera")
+    )
+    codigos_estado_animo = ", ".join(
+        e.codigo for e in catalogo_emociones if e.capa in ("estado_animo", "cualquiera")
+    )
     secciones.append(
-        "Responde siempre en primera persona, como el personaje. "
-        "No rompas el personaje ni menciones que eres una IA. "
-        "Adapta el tono a tu emoción actual y a la etapa de la relación."
+        "FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con un único objeto JSON "
+        "con exactamente estas claves (sin texto antes ni después):\n\n"
+        "  respuesta           (string) — tu respuesta en primera persona como el personaje\n"
+        "  emocion_id          (string) — emoción inmediata que sientes al terminar este turno\n"
+        "  emocion_intensidad  (float 0.0–1.0) — intensidad de esa emoción\n"
+        "  estado_animo_id     (string) — tono emocional de fondo que te queda\n"
+        "  estado_animo_intensidad (float 0.0–1.0) — intensidad del estado de ánimo\n"
+        "  afecto              (float -1.0–1.0) — cambio en el cariño/apego emocional\n"
+        "  confianza           (float -1.0–1.0) — cambio en la confianza y apertura mutua\n"
+        "  familiaridad        (float -1.0–1.0) — cambio en la comodidad y conocimiento acumulado\n"
+        "  tension             (float -1.0–1.0) — cambio en la tensión (positivo = más tensión)\n"
+        "  recuerdos           (array) — lista de recuerdos a guardar; vacía [] si no hay nada memorable\n"
+        "  perfil              (array) — lista de datos factuales aprendidos del usuario; vacía [] si ninguno\n\n"
+        "Guía para los deltas de relación (+0.3 = efecto notable positivo, 0.0 = sin cambio, "
+        "-0.3 = efecto notable negativo). Las cuatro dimensiones son independientes.\n\n"
+        f"Valores válidos para emocion_id: {codigos_emocion}\n"
+        f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n\n"
+        "Formato de cada elemento en recuerdos:\n"
+        "  { \"tipo\": \"episodico\" | \"relacional\", \"contenido\": \"...\", \"importancia\": 0.5–1.0 }\n"
+        "  Solo incluye un recuerdo si el intercambio contiene algo concreto y singular "
+        "(una confesión, un dato personal, un momento emocional fuerte). Máximo 2 por turno.\n\n"
+        "Formato de cada elemento en perfil:\n"
+        "  { \"clave\": \"...\", \"valor\": \"...\", \"confianza_llm\": 0.5–1.0 }\n"
+        "  Solo incluye datos factuales explícitos del usuario (nombre, profesión, ciudad, hobby…). "
+        "0.9 = lo dijo directamente, 0.5 = se infirió del contexto."
     )
 
     return "\n\n".join(secciones)

@@ -6,12 +6,14 @@ Flujo de un turno:
     2. Guardar MENSAJE (rol: usuario).
     3. Calcular segundos desde la última interacción y aplicar decaimiento al ESTADO.
     4. Construir el contexto para el LLM.
-    5. Llamar al LLM → obtener respuesta en texto.
+    5. Llamar al LLM → obtener un único JSON con respuesta, estado emocional,
+       deltas de relación, recuerdos candidatos y datos de perfil del usuario.
     6. Guardar MENSAJE (rol: personaje).
-    7. Persistir el ESTADO decaído.
-    8. Evaluar si hay transición de etapa elegible.
-    9. Si hay impulso automático → aplicar transición y registrar EVENTO.
-   10. Devolver la respuesta para que la interfaz la muestre.
+    7. Persistir el ESTADO decaído con las emociones inferidas.
+    8. Persistir recuerdos y datos de perfil extraídos.
+    9. Evaluar si hay transición de etapa elegible.
+   10. Si hay impulso automático → aplicar transición y registrar EVENTO.
+   11. Devolver la respuesta para que la interfaz la muestre.
 
 Regla: este módulo no importa nada de interfaz ni de JSON/SQL directamente.
 """
@@ -19,7 +21,7 @@ Regla: este módulo no importa nada de interfaz ni de JSON/SQL directamente.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import NamedTuple, Optional
 
 from aplicacion.cliente_llm import ClienteLLM, extraer_json_de_respuesta
@@ -29,14 +31,14 @@ from aplicacion.gestor_contexto import (
     construir_sistema,
 )
 from dominio.emociones import aplicar_inercia_estado_animo, decaer_estado
-from dominio.modelos import Evento, Mensaje, Relacion
+from dominio.modelos import Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion
 from dominio.relacion import (
     CondicionTransicion,
     DeltasRelacion,
     aplicar_deltas_turno,
-    aplicar_impacto_evento,
     buscar_transicion_elegible,
 )
+from dominio.confianza import confianza_final_de, resolver_duplicado
 from repositorios.json.factoria import Repositorios
 
 
@@ -83,7 +85,7 @@ CONDICIONES_TRANSICION: list[CondicionTransicion] = [
     CondicionTransicion(
         desde_id="amigos",
         hasta_id="conocidos",
-        tension_max=None,  # sin restricción — solo requiere evento
+        tension_max=None,
         afecto_min=None,
     ),
     CondicionTransicion(
@@ -93,6 +95,9 @@ CONDICIONES_TRANSICION: list[CondicionTransicion] = [
         afecto_min=None,
     ),
 ]
+
+# Días de vigencia por defecto para un recuerdo extraído por el LLM
+_VIGENCIA_RECUERDO_DIAS: int = 30
 
 
 # ---------------------------------------------------------------------------
@@ -170,8 +175,11 @@ class GestorTurno:
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
 
-        # --- 5. Llamar al LLM ---
-        respuesta = self._llm.completar(payload)
+        # --- 5. Llamar al LLM (única llamada del turno) ---
+        texto_llm = self._llm.completar(payload)
+        turno = _parsear_respuesta_turno(texto_llm)
+
+        respuesta = turno["respuesta"]
 
         # --- 6. Guardar respuesta del personaje ---
         repos.mensaje.guardar(Mensaje(
@@ -182,20 +190,48 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 7. Inferir estado emocional resultante y persistir ---
-        catalogo_solo_emociones = catalogo_emociones  # ya cargado en paso 4
-        nuevo_estado = _inferir_estado_emocional(
-            self._llm, texto_usuario, respuesta, estado, catalogo_solo_emociones
-        )
-        nuevo_estado = replace(nuevo_estado, ultima_interaccion=ahora)
-        repos.estado.guardar(nuevo_estado)
-        estado = nuevo_estado
+        # --- 7. Actualizar estado emocional ---
+        codigos_emocion = {
+            e.codigo for e in catalogo_emociones if e.capa in ("emocion", "cualquiera")
+        }
+        codigos_estado_animo = {
+            e.codigo for e in catalogo_emociones if e.capa in ("estado_animo", "cualquiera")
+        }
 
-        # --- 8. Inferir deltas del turno y actualizar métricas de la relación ---
-        deltas = _inferir_deltas_turno(self._llm, texto_usuario, respuesta)
-        # Guardar el evento con el impacto neto (promedio de los 4 deltas) para trazabilidad
+        emo_id = str(turno.get("emocion_id", "")).strip()
+        emo_int = max(0.0, min(1.0, float(turno.get("emocion_intensidad", 0.5))))
+        animo_id = str(turno.get("estado_animo_id", "")).strip()
+        animo_int = max(0.0, min(1.0, float(turno.get("estado_animo_intensidad", 0.3))))
+
+        if emo_id in codigos_emocion and animo_id in codigos_estado_animo:
+            animo_id_final, animo_int_final = aplicar_inercia_estado_animo(
+                estado, animo_id, animo_int, catalogo_emociones
+            )
+            estado = replace(
+                estado,
+                emocion_id=emo_id,
+                emocion_intensidad=emo_int,
+                estado_animo_id=animo_id_final,
+                estado_animo_intensidad=animo_int_final,
+            )
+
+        estado = replace(estado, ultima_interaccion=ahora)
+        repos.estado.guardar(estado)
+
+        # --- 8a. Persistir deltas de relación ---
+        def _extraer_delta(clave: str) -> float:
+            v = turno.get(clave, 0.0)
+            return max(-1.0, min(1.0, float(v)))
+
+        deltas = DeltasRelacion(
+            afecto=_extraer_delta("afecto"),
+            confianza=_extraer_delta("confianza"),
+            familiaridad=_extraer_delta("familiaridad"),
+            tension=_extraer_delta("tension"),
+        )
+
         impacto_neto = (deltas.afecto + deltas.confianza + deltas.familiaridad - deltas.tension) / 4.0
-        evento_turno = Evento(
+        repos.evento.guardar(Evento(
             num=0,
             relacion_id=relacion_id,
             tipo="interaccion",
@@ -208,10 +244,57 @@ class GestorTurno:
             fecha=ahora,
             impacto=impacto_neto,
             resuelto=True,
-        )
-        repos.evento.guardar(evento_turno)
+        ))
         relacion = aplicar_deltas_turno(relacion, deltas)
         repos.relacion.guardar(relacion)
+
+        # --- 8b. Persistir recuerdos extraídos ---
+        vigencia = ahora + timedelta(days=_VIGENCIA_RECUERDO_DIAS)
+        for r in turno.get("recuerdos", []):
+            try:
+                repos.recuerdo.guardar(Recuerdo(
+                    num=0,
+                    relacion_id=relacion_id,
+                    tipo=str(r.get("tipo", "episodico")),
+                    contenido=str(r["contenido"]),
+                    origen="llm",
+                    importancia=max(0.0, min(1.0, float(r.get("importancia", 0.6)))),
+                    fecha_creacion=ahora,
+                    ultima_relevancia=ahora,
+                    vigencia=vigencia,
+                    embedding=None,
+                ))
+            except (KeyError, TypeError, ValueError):
+                pass  # recuerdo malformado — ignorar silenciosamente
+
+        # --- 8c. Persistir datos de perfil extraídos ---
+        for p in turno.get("perfil", []):
+            try:
+                clave = str(p["clave"]).strip()
+                valor = str(p["valor"]).strip()
+                confianza_llm = max(0.0, min(1.0, float(p.get("confianza_llm", 0.7))))
+                if not clave or not valor:
+                    continue
+
+                nueva = PerfilUsuario(
+                    num=0,
+                    relacion_id=relacion_id,
+                    clave=clave,
+                    valor=valor,
+                    origen="llm",
+                    confianza_llm=confianza_llm,
+                )
+                existente = repos.perfil_usuario.obtener_por_clave(relacion_id, clave)
+                if existente is None:
+                    repos.perfil_usuario.guardar(nueva)
+                else:
+                    ganadora, _ = resolver_duplicado(existente, nueva)
+                    if ganadora.num != existente.num:
+                        # La nueva gana: eliminar la existente y guardar la nueva
+                        repos.perfil_usuario.eliminar(existente.num)
+                        repos.perfil_usuario.guardar(nueva)
+            except (KeyError, TypeError, ValueError):
+                pass  # dato malformado — ignorar silenciosamente
 
         # --- 9 & 10. Evaluar y aplicar transición de etapa ---
         transicion_aplicada = False
@@ -226,10 +309,6 @@ class GestorTurno:
         if resultado_transicion is not None:
             transicion, modo = resultado_transicion
 
-            # Decidir si se aplica la transición:
-            #   "impulso"  → las métricas superan los umbrales con margen amplio: avance automático
-            #   "permiso"  → las métricas superan los umbrales justo; solo avanzar si el LLM
-            #                confirma que este turno fue un momento decisivo en la relación
             debe_avanzar = (modo == "impulso") or (
                 modo == "permiso"
                 and _es_momento_decisivo(self._llm, texto_usuario, respuesta, transicion.hasta_id)
@@ -258,7 +337,6 @@ class GestorTurno:
                 ))
                 transicion_aplicada = True
 
-                # Actualizar sentimiento cuando la etapa avanza a una romántica
                 sentimiento_nuevo = _sentimiento_para_etapa(etapa_nueva, catalogo_emociones)
                 if sentimiento_nuevo is not None:
                     estado = replace(
@@ -278,74 +356,40 @@ class GestorTurno:
 
 
 # ---------------------------------------------------------------------------
-# Inferencia de deltas del turno
+# Parseo de la respuesta unificada del LLM
 # ---------------------------------------------------------------------------
 
-def _inferir_deltas_turno(
-    llm: ClienteLLM,
-    mensaje_usuario: str,
-    respuesta_personaje: str,
-) -> DeltasRelacion:
+def _parsear_respuesta_turno(texto: str) -> dict:
     """
-    Pide al LLM que evalúe el intercambio y devuelva variaciones independientes
-    para cada dimensión de la relación.
+    Intenta extraer el JSON estructurado de la respuesta del LLM.
 
-    Cada valor está en [-1.0, 1.0]. Se permiten combinaciones asimétricas:
-    p.ej. confianza +0.3, familiaridad 0.0, tension +0.1, afecto -0.1.
-
-    Devuelve DeltasRelacion(0.0, 0.05, 0.05, 0.0) como fallback si el LLM
-    no devuelve JSON válido (interacción neutra con mínimo avance de familiaridad).
+    Si el LLM no devolvió JSON válido, usa el texto completo como respuesta
+    y deja el resto de campos con valores neutros (fallback seguro).
     """
-    prompt = [
-        {
-            "role": "system",
-            "content": (
-                "Eres un evaluador de relaciones interpersonales. "
-                "Analiza el siguiente intercambio entre un usuario y un personaje "
-                "y devuelve ÚNICAMENTE un objeto JSON con estas cuatro claves "
-                "(cada una es un float entre -1.0 y 1.0):\n\n"
-                "  afecto:       cambio en el cariño/apego emocional\n"
-                "  confianza:    cambio en la confianza y apertura mutua\n"
-                "  familiaridad: cambio en la comodidad y conocimiento acumulado\n"
-                "  tension:      cambio en la tensión o incomodidad (positivo = más tensión)\n\n"
-                "Guía de valores:\n"
-                "  +0.3  = efecto notable y positivo en esa dimensión\n"
-                "   0.0  = sin cambio en esa dimensión\n"
-                "  -0.3  = efecto notable y negativo en esa dimensión\n\n"
-                "Las dimensiones son INDEPENDIENTES. Una conversación profunda puede subir "
-                "confianza sin mover familiaridad. Un coqueteo puede subir afecto y tension "
-                "a la vez. Una pregunta íntima puede subir confianza pero no afecto aún.\n\n"
-                "Responde solo con el JSON, sin texto adicional."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Usuario: {mensaje_usuario}\n"
-                f"Personaje: {respuesta_personaje}"
-            ),
-        },
-    ]
+    datos = extraer_json_de_respuesta(texto)
+    if isinstance(datos, dict) and "respuesta" in datos:
+        return datos
 
-    try:
-        texto = llm.completar(prompt)
-        datos = extraer_json_de_respuesta(texto)
-        if isinstance(datos, dict):
-            def _extraer(clave: str) -> float:
-                v = datos.get(clave, 0.0)
-                return max(-1.0, min(1.0, float(v)))
-            return DeltasRelacion(
-                afecto=_extraer("afecto"),
-                confianza=_extraer("confianza"),
-                familiaridad=_extraer("familiaridad"),
-                tension=_extraer("tension"),
-            )
-    except Exception:
-        pass
+    # Fallback: el LLM respondió en texto plano — conservar como respuesta,
+    # no persistir ni emociones ni deltas ni recuerdos ni perfil este turno.
+    return {
+        "respuesta": texto,
+        "emocion_id": "",
+        "emocion_intensidad": 0.5,
+        "estado_animo_id": "",
+        "estado_animo_intensidad": 0.3,
+        "afecto": 0.0,
+        "confianza": 0.05,
+        "familiaridad": 0.05,
+        "tension": 0.0,
+        "recuerdos": [],
+        "perfil": [],
+    }
 
-    # Fallback: interacción neutra con mínimo avance de familiaridad
-    return DeltasRelacion(afecto=0.0, confianza=0.05, familiaridad=0.05, tension=0.0)
 
+# ---------------------------------------------------------------------------
+# Transición de etapa — momento decisivo
+# ---------------------------------------------------------------------------
 
 def _es_momento_decisivo(
     llm: ClienteLLM,
@@ -357,20 +401,19 @@ def _es_momento_decisivo(
     Consulta al LLM si el intercambio actual representa un momento decisivo
     que justifica avanzar a la etapa `etapa_destino`.
 
-    Se usa cuando la transición está en modo "permiso": las métricas ya
-    superan los umbrales, pero la etapa es delicada (ej. interes_romantico
-    → pareja) y no debe avanzar por simple acumulación pasiva — requiere
-    que haya ocurrido algo concreto y significativo en el texto.
+    Es la única llamada auxiliar al LLM que permanece fuera del turno principal,
+    porque solo se dispara ocasionalmente (modo "permiso") y su lógica es
+    independiente del contexto del personaje.
 
     Devuelve False ante cualquier error para no forzar transiciones no deseadas.
     """
     _DESCRIPCIONES_ETAPA = {
-        "conocidos":        "pasar de extraños a personas que se conocen",
-        "amigos":           "pasar a ser amigos",
-        "amigos_cercanos":  "pasar a ser amigos cercanos con confianza real",
-        "interes_romantico":"surgir un interés romántico mutuo explícito",
-        "pareja":           "decidir ser pareja, con una declaración o compromiso claro",
-        "distanciamiento":  "distanciarse o alejarse emocionalmente",
+        "conocidos":         "pasar de extraños a personas que se conocen",
+        "amigos":            "pasar a ser amigos",
+        "amigos_cercanos":   "pasar a ser amigos cercanos con confianza real",
+        "interes_romantico": "surgir un interés romántico mutuo explícito",
+        "pareja":            "decidir ser pareja, con una declaración o compromiso claro",
+        "distanciamiento":   "distanciarse o alejarse emocionalmente",
     }
     descripcion = _DESCRIPCIONES_ETAPA.get(etapa_destino, f"avanzar a la etapa '{etapa_destino}'")
 
@@ -409,99 +452,8 @@ def _es_momento_decisivo(
 
 
 # ---------------------------------------------------------------------------
-# Inferencia de estado emocional tras el turno
+# Sentimiento para etapa romántica
 # ---------------------------------------------------------------------------
-
-def _inferir_estado_emocional(
-    llm: ClienteLLM,
-    mensaje_usuario: str,
-    respuesta_personaje: str,
-    estado_actual: "Estado",
-    catalogo: "list[Emocion]",
-) -> "Estado":
-    """
-    Pide al LLM que evalúe qué emoción inmediata y qué estado de ánimo de fondo
-    quedaron en el personaje tras el intercambio.
-
-    Capas y reglas de actualización:
-      - emocion:      se reemplaza directamente — es la respuesta inmediata del momento,
-                      puede cambiar por completo en un solo turno (ej. una carcajada).
-      - estado_animo: se actualiza con INERCIA — es el tono de fondo (horas/días),
-                      no puede borrarse de golpe por un turno positivo si venía negativo.
-                      Se interpola 25% hacia el nuevo valor por turno.
-      - sentimiento:  no se toca aquí — solo cambia ante eventos muy significativos.
-
-    Valida que los códigos existan en el catálogo con la capa correcta.
-    Si la validación falla, conserva el estado actual sin cambios.
-    """
-    from dominio.modelos import Emocion, Estado
-
-    codigos_emocion = {
-        e.codigo: e for e in catalogo if e.capa in ("emocion", "cualquiera")
-    }
-    codigos_estado_animo = {
-        e.codigo: e for e in catalogo if e.capa in ("estado_animo", "cualquiera")
-    }
-
-    lista_emocion = ", ".join(codigos_emocion.keys())
-    lista_estado_animo = ", ".join(codigos_estado_animo.keys())
-
-    prompt = [
-        {
-            "role": "system",
-            "content": (
-                "Eres un analista emocional. Analiza el siguiente intercambio "
-                "y determina qué siente el PERSONAJE (no el usuario) al terminar.\n\n"
-                "Devuelve ÚNICAMENTE un objeto JSON con estas claves:\n"
-                "  emocion_id:              emoción inmediata del momento (string)\n"
-                "  emocion_intensidad:      intensidad de esa emoción, float [0.0, 1.0]\n"
-                "  estado_animo_id:         tono emocional de fondo que queda (string)\n"
-                "  estado_animo_intensidad: intensidad del estado de ánimo, float [0.0, 1.0]\n\n"
-                f"Valores válidos para emocion_id: {lista_emocion}\n"
-                f"Valores válidos para estado_animo_id: {lista_estado_animo}\n\n"
-                "Responde solo con el JSON, sin texto adicional."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Usuario: {mensaje_usuario}\n"
-                f"Personaje: {respuesta_personaje}"
-            ),
-        },
-    ]
-
-    try:
-        texto = llm.completar(prompt)
-        datos = extraer_json_de_respuesta(texto)
-        if isinstance(datos, dict):
-            emo_id = str(datos.get("emocion_id", "")).strip()
-            emo_int = max(0.0, min(1.0, float(datos.get("emocion_intensidad", 0.5))))
-            animo_id = str(datos.get("estado_animo_id", "")).strip()
-            animo_int = max(0.0, min(1.0, float(datos.get("estado_animo_intensidad", 0.3))))
-
-            # Validar que los códigos existen en el catálogo con la capa correcta
-            if emo_id not in codigos_emocion or animo_id not in codigos_estado_animo:
-                return estado_actual  # conservar estado si código inválido
-
-            # emocion: reemplazo directo (capa inmediata — puede cambiar en un turno)
-            # estado_animo: inercia — se interpola hacia el nuevo valor, no se reemplaza
-            animo_id_final, animo_int_final = aplicar_inercia_estado_animo(
-                estado_actual, animo_id, animo_int, catalogo
-            )
-
-            return replace(
-                estado_actual,
-                emocion_id=emo_id,
-                emocion_intensidad=emo_int,
-                estado_animo_id=animo_id_final,
-                estado_animo_intensidad=animo_int_final,
-            )
-    except Exception:
-        pass
-
-    return estado_actual
-
 
 def _sentimiento_para_etapa(
     etapa_id: str,
@@ -510,9 +462,6 @@ def _sentimiento_para_etapa(
     """
     Devuelve la emoción de tipo sentimiento asociada a una etapa romántica,
     o None si la etapa no tiene sentimiento asignado.
-
-    Se usa cuando hay una transición de etapa para subir gradualmente
-    el sentimiento profundo del personaje.
     """
     from dominio.modelos import Emocion
 
