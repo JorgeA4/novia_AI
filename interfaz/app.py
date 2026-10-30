@@ -8,20 +8,23 @@ Responsabilidades:
     - Lanzar la PantallaChat.
 
 Uso:
-    python -m interfaz
+    python main.py          ← forma recomendada (lee .env automáticamente)
+    python -m interfaz      ← alternativa sin carga de .env
 
-Variables de entorno:
+Variables de entorno (configurar en .env — ver .env.ejemplo):
+    PROVEEDOR         — "gemini" | "openai" | "stub"
+                        Si no se define: gemini si hay GEMINI_API_KEY, si no openai.
     NOVIA_DATOS       — ruta al directorio de datos (por defecto: ./data)
-    NOVIA_STUB        — si está definida, usa el ClienteStub sin LLM real
+    NOVIA_STUB        — alternativa a PROVEEDOR=stub (retrocompatibilidad)
 
-    Proveedor OpenAI (por defecto si GEMINI_API_KEY no esta definida):
-    OPENAI_API_KEY    — clave de API de OpenAI
-    NOVIA_MODELO      — modelo a usar (por defecto: gpt-4o-mini)
-    NOVIA_URL_BASE    — URL base alternativa (Ollama, LM Studio, OpenRouter...)
-
-    Proveedor Gemini (activo si GEMINI_API_KEY esta definida):
+    Proveedor gemini:
     GEMINI_API_KEY    — clave de API de Google Gemini
-    NOVIA_MODELO      — modelo a usar (por defecto: gemini-1.5-flash)
+    NOVIA_MODELO      — modelo (por defecto: gemini-1.5-flash)
+
+    Proveedor openai (también Ollama, LM Studio, OpenRouter, etc.):
+    OPENAI_API_KEY    — clave de API
+    NOVIA_MODELO      — modelo (por defecto: gpt-4o-mini)
+    NOVIA_URL_BASE    — URL base alternativa para servidores compatibles
 """
 
 from __future__ import annotations
@@ -145,28 +148,67 @@ class NoviApp(App):
         self._repos = crear_repositorios(ruta_datos)
         _asegurar_datos_iniciales(self._repos)
 
-        # Cliente LLM — se elige el proveedor según las variables de entorno:
-        #   NOVIA_STUB        → stub sin LLM (modo desarrollo)
-        #   GEMINI_API_KEY    → Google Gemini
-        #   OPENAI_API_KEY    → OpenAI (o compatible vía NOVIA_URL_BASE)
-        if os.environ.get("NOVIA_STUB"):
-            cliente = ClienteStub("… (modo stub sin LLM)")
-        elif os.environ.get("GEMINI_API_KEY"):
-            cliente = ClienteGemini(
-                modelo=os.environ.get("NOVIA_MODELO", "gemini-1.5-flash"),
-                api_key=os.environ.get("GEMINI_API_KEY"),
-            )
-        else:
-            cliente = ClienteOpenAI(
-                modelo=os.environ.get("NOVIA_MODELO", "gpt-4o-mini"),
-                url_base=os.environ.get("NOVIA_URL_BASE") or None,
-                api_key=os.environ.get("OPENAI_API_KEY"),
-            )
+        # Cliente LLM — se elige el proveedor según PROVEEDOR (o heurística por clave)
+        cliente = _crear_cliente_llm()
 
         self._gestor = GestorTurno(self._repos, cliente)
 
     def on_mount(self) -> None:
+        """Al montar, ajustar subtítulo con el proveedor activo."""
+        self.SUB_TITLE = _nombre_proveedor_activo()
         self.push_screen(PantallaChat(self._gestor, relacion_id=1))
+
+
+# ---------------------------------------------------------------------------
+# Selección de proveedor LLM
+# ---------------------------------------------------------------------------
+
+def _crear_cliente_llm():
+    """
+    Elige e instancia el cliente LLM según las variables de entorno.
+
+    Orden de prioridad:
+        1. NOVIA_STUB o PROVEEDOR=stub  → ClienteStub (sin LLM real)
+        2. PROVEEDOR=gemini             → ClienteGemini
+        3. PROVEEDOR=openai             → ClienteOpenAI
+        4. Sin PROVEEDOR + GEMINI_API_KEY → ClienteGemini  (retrocompatibilidad)
+        5. Sin PROVEEDOR                → ClienteOpenAI   (fallback)
+    """
+    proveedor = os.environ.get("PROVEEDOR", "").lower().strip()
+
+    if os.environ.get("NOVIA_STUB") or proveedor == "stub":
+        return ClienteStub("… (modo stub sin LLM)")
+
+    if proveedor == "gemini" or (not proveedor and os.environ.get("GEMINI_API_KEY")):
+        return ClienteGemini(
+            modelo=os.environ.get("NOVIA_MODELO", "gemini-1.5-flash"),
+            api_key=os.environ.get("GEMINI_API_KEY"),
+        )
+
+    # openai explícito o fallback
+    return ClienteOpenAI(
+        modelo=os.environ.get("NOVIA_MODELO", "gpt-4o-mini"),
+        url_base=os.environ.get("NOVIA_URL_BASE") or None,
+        api_key=os.environ.get("OPENAI_API_KEY"),
+    )
+
+
+def _nombre_proveedor_activo() -> str:
+    """Devuelve una cadena legible con el proveedor y modelo activos."""
+    proveedor = os.environ.get("PROVEEDOR", "").lower().strip()
+
+    if os.environ.get("NOVIA_STUB") or proveedor == "stub":
+        return "stub (sin LLM)"
+
+    if proveedor == "gemini" or (not proveedor and os.environ.get("GEMINI_API_KEY")):
+        modelo = os.environ.get("NOVIA_MODELO", "gemini-1.5-flash")
+        return f"gemini · {modelo}"
+
+    modelo = os.environ.get("NOVIA_MODELO", "gpt-4o-mini")
+    url = os.environ.get("NOVIA_URL_BASE")
+    if url:
+        return f"openai-compat · {modelo} · {url}"
+    return f"openai · {modelo}"
 
 
 # ---------------------------------------------------------------------------
