@@ -203,6 +203,33 @@ Al avanzar de etapa, el sentimiento se actualiza: el sistema asigna el sentimien
 
 ---
 
+## RECUERDO — categoría y vigencia
+
+El campo `categoria` clasifica cada recuerdo para aplicar lógica de vigencia y priorización:
+
+| categoria         | descripción                                               | vigencia por defecto |
+|-------------------|-----------------------------------------------------------|----------------------|
+| `hecho_puntual`   | algo que ocurrió una vez, ligado a un momento concreto    | 30 días              |
+| `rasgo`           | característica estable de una persona, cosa o lugar       | permanente           |
+| `hito`            | evento que marcó la relación; irrepetible en este estado  | permanente           |
+| `estado_temporal` | cómo estaba alguien o algo durante un periodo             | 14 días              |
+
+La vigencia la calcula el sistema (`calcular_vigencia()` en `dominio/modelos.py`), **nunca el LLM**:
+
+```
+si importancia >= umbral_permanencia (0.85)  →  vigencia = None (permanente)
+si emocion_intensidad >= umbral_permanencia  →  vigencia = None (permanente)
+si categoria en ("rasgo", "hito")            →  vigencia = None (permanente)
+si categoria == "hecho_puntual"              →  vigencia = ahora + 30 días
+si categoria == "estado_temporal"            →  vigencia = ahora + 14 días
+```
+
+Los umbrales y días se leen de `configuracion.json` (`recuerdos.*`). `vigencia = None` significa permanente; el recuerdo nunca caduca salvo que se borre explícitamente.
+
+`emocion_asociada_id` e `emocion_asociada_intensidad` son **obligatorios**. Usar `"neutro"` / `0.0` cuando no hay carga emocional. Todos los códigos del catálogo de emociones son válidos (incluyendo `"neutro"` con `capa: "cualquiera"`).
+
+**Regla de formato del contenido:** oración completa con sujeto explícito + verbo en pasado. Si el sujeto es el propio personaje, se usa primera persona (`"Admití que..."`, `"Sentí que..."`). Si es otra persona o cosa, se nombra (`"Jorge dijo que..."`, `"El clima estaba..."`). Los fragmentos nominales o frases sin verbo no son válidos.
+
 ## Deduplicación de RECUERDO
 
 El LLM tiende a generar recuerdos duplicados cuando el usuario vuelve a mencionar un hecho ya registrado. Se aplican dos capas de protección:

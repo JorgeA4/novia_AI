@@ -88,7 +88,9 @@ class ConfigRelacion:
 
 @dataclass(frozen=True)
 class ConfigRecuerdos:
-    vigencia_dias: int
+    vigencia_dias_hecho_puntual: int    # días de vigencia para "hecho_puntual"
+    vigencia_dias_estado_temporal: int  # días de vigencia para "estado_temporal"
+    umbral_permanencia: float           # importancia o emocion_intensidad >= este valor → vigencia None
 
 
 @dataclass(frozen=True)

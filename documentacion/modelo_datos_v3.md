@@ -136,7 +136,9 @@ disposicion_delta   → FLOAT (-1.0 – 1.0)
 
 ## PERFIL_USUARIO
 
-Datos factuales y estables que el personaje ha aprendido sobre el usuario. Pares clave-valor estructurados que el sistema puede leer, actualizar y contrastar sin depender del LLM.
+Datos factuales y estables que el personaje ha aprendido sobre cualquier persona relevante en el contexto de una relación. Pares clave-valor estructurados que el sistema puede leer, actualizar y contrastar sin depender del LLM.
+
+`sujeto` identifica de quién es el dato: el usuario, el propio personaje, o una tercera persona mencionada. La clave única es la tripleta `(relacion_id, sujeto, clave)`.
 
 `confianza_llm` es la certeza que el LLM declaró al extraer el dato. El sistema la penaliza por `origen` para obtener la confianza final (`confianza_final = confianza_llm × factor_origen`). Ver lógica interna.
 
@@ -144,22 +146,39 @@ Datos factuales y estables que el personaje ha aprendido sobre el usuario. Pares
 
 num           → INT (PK)
 relacion_id   → INT (FK -> RELACION.num)
+sujeto        → STR ("usuario" | "personaje" | "tercero:<nombre>")
 clave         → STR
 valor         → STR
 origen        → STR ("sistema" | "llm" | "usuario_explicito")
 confianza_llm → FLOAT (0.0 – 1.0)
 
+### Semántica de `sujeto`
+
+| valor              | representa                                        | ejemplo         |
+|--------------------|---------------------------------------------------|-----------------|
+| `"usuario"`        | el usuario de la relación                         | Jorge           |
+| `"personaje"`      | el propio personaje (información sobre sí mismo)  | Luna            |
+| `"tercero:<nombre>"` | cualquier tercera persona mencionada            | "tercero:mama"  |
+
 ------------------------------------------------------
 
 ## RECUERDO
 
-Memoria narrativa del personaje sobre la relación. Los datos factuales del usuario pertenecen a PERFIL_USUARIO.
+Memoria narrativa del personaje sobre la relación. Los datos factuales de personas pertenecen a PERFIL_USUARIO.
 
-`importancia` decae con el tiempo si el recuerdo no se reactiva; cuando cae bajo umbral el sistema deja de recuperarlo. `vigencia` marca la fecha tras la cual puede borrarse físicamente si no se reactivó. `embedding` se deja NULL en MVP y se popula en fase 2 para búsqueda semántica.
+`importancia` decae con el tiempo si el recuerdo no se reactiva; cuando cae bajo umbral el sistema deja de recuperarlo. `vigencia` es `None` para recuerdos permanentes; cuando tiene valor marca la fecha tras la cual puede borrarse físicamente si no se reactivó — calculada por el sistema según `categoria`, nunca por el LLM. `embedding` se deja NULL en MVP y se popula en fase 2 para búsqueda semántica.
 
-Tipos:
-- `episodico` — eventos concretos con dimensión temporal.
-- `relacional` — momentos importantes del vínculo: promesas, discusiones, reconciliaciones.
+`emocion_asociada_id` e `emocion_asociada_intensidad` son **obligatorios**; usar `"neutro"` / `0.0` cuando no hay carga emocional.
+
+Tipos (`tipo`):
+- `"episodico"` — eventos concretos con dimensión temporal.
+- `"relacional"` — momentos importantes del vínculo: promesas, discusiones, reconciliaciones.
+
+Categorías (`categoria`):
+- `"hecho_puntual"` — algo que ocurrió una vez, ligado a un momento concreto.
+- `"rasgo"` — característica estable de una persona, cosa o lugar.
+- `"hito"` — evento que marcó la relación; irrepetible en este estado.
+- `"estado_temporal"` — cómo estaba alguien/algo durante un periodo acotado.
 
 ### Campos
 
@@ -167,15 +186,27 @@ num                         → INT (PK)
 relacion_id                 → INT (FK -> RELACION.num)
 evento_id                   → INT (FK -> EVENTO.num, opcional)
 tipo                        → STR ("episodico" | "relacional")
+categoria                   → STR ("hecho_puntual" | "rasgo" | "hito" | "estado_temporal")
 contenido                   → STR
 origen                      → STR ("sistema" | "llm")
 importancia                 → FLOAT (0.0 – 1.0)
-emocion_asociada_id         → STR (FK -> EMOCION.codigo, opcional)
-emocion_asociada_intensidad → FLOAT (0.0 – 1.0, opcional)
+emocion_asociada_id         → STR (FK -> EMOCION.codigo)
+emocion_asociada_intensidad → FLOAT (0.0 – 1.0)
 fecha_creacion              → DATETIME
 ultima_relevancia           → DATETIME
-vigencia                    → DATETIME
-embedding                   → VECTOR (opcional)
+vigencia                    → DATETIME (opcional — None = permanente)
+embedding                   → VECTOR (opcional — None en MVP, fase 2)
+
+### Lógica de `vigencia` por `categoria`
+
+| categoria        | vigencia                                                        |
+|------------------|-----------------------------------------------------------------|
+| `rasgo`          | permanente (None)                                               |
+| `hito`           | permanente (None)                                               |
+| `hecho_puntual`  | fecha_creacion + `vigencia_dias_hecho_puntual` (defecto: 30 d)  |
+| `estado_temporal`| fecha_creacion + `vigencia_dias_estado_temporal` (defecto: 14 d)|
+
+Excepción: si `importancia >= umbral_permanencia` (defecto: 0.85) o `emocion_asociada_intensidad >= umbral_permanencia`, el recuerdo es siempre permanente independientemente de la categoría.
 
 ------------------------------------------------------
 

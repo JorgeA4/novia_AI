@@ -21,7 +21,7 @@ Regla: este módulo no importa nada de interfaz ni de JSON/SQL directamente.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import NamedTuple, Optional
 
 from aplicacion.cliente_llm import ClienteLLM, extraer_json_de_respuesta
@@ -32,7 +32,7 @@ from aplicacion.gestor_contexto import (
 )
 from dominio.configuracion import cfg
 from dominio.emociones import aplicar_presion_emocion_sobre_animo, decaer_estado
-from dominio.modelos import Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion
+from dominio.modelos import Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion, calcular_vigencia
 from dominio.relacion import (
     CondicionTransicion,
     DeltasRelacion,
@@ -263,21 +263,34 @@ class GestorTurno:
         # `recuerdos` ya está cargado arriba (paso 4); se usa para deduplicar.
         # Se actualiza en cada iteración para que dos recuerdos del mismo turno
         # tampoco se dupliquen entre sí.
-        vigencia = ahora + timedelta(days=cfg.recuerdos.vigencia_dias)
+        categorias_validas = {"hecho_puntual", "rasgo", "hito", "estado_temporal"}
         for r in turno.get("recuerdos", []):
             try:
                 contenido = str(r["contenido"])
                 if _es_duplicado(contenido, recuerdos):
                     continue  # ya existe uno semánticamente equivalente — descartar
+
+                importancia = max(0.0, min(1.0, float(r.get("importancia", 0.6))))
+                categoria = str(r.get("categoria", "hecho_puntual"))
+                if categoria not in categorias_validas:
+                    categoria = "hecho_puntual"
+                emocion_id = str(r.get("emocion_asociada_id", "neutro")).strip() or "neutro"
+                emocion_int = max(0.0, min(1.0, float(r.get("emocion_asociada_intensidad", 0.0))))
+
+                vigencia = calcular_vigencia(categoria, importancia, emocion_int, ahora)
+
                 nuevo_recuerdo = Recuerdo(
                     num=0,
                     relacion_id=relacion_id,
                     tipo=str(r.get("tipo", "episodico")),
+                    categoria=categoria,
                     contenido=contenido,
                     origen="llm",
-                    importancia=max(0.0, min(1.0, float(r.get("importancia", 0.6)))),
+                    importancia=importancia,
                     fecha_creacion=ahora,
                     ultima_relevancia=ahora,
+                    emocion_asociada_id=emocion_id,
+                    emocion_asociada_intensidad=emocion_int,
                     vigencia=vigencia,
                     embedding=None,
                 )

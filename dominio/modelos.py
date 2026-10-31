@@ -183,22 +183,30 @@ class Recuerdo:
     """
     Memoria narrativa del personaje sobre la relación.
 
+    `categoria` clasifica el recuerdo para aplicar lógica de vigencia y priorización:
+        "hecho_puntual"   — algo que ocurrió una vez, ligado a un momento concreto
+        "rasgo"           — característica estable de una persona, cosa o lugar
+        "hito"            — evento que marcó la relación; irrepetible en este estado
+        "estado_temporal" — cómo estaba alguien/algo durante un periodo
+
+    `vigencia` es None para recuerdos permanentes (calculada por el sistema, no el LLM).
+    `emocion_asociada_id` e `emocion_asociada_intensidad` son obligatorios; usar "neutro"/0.0
+    cuando no hay carga emocional.
     `embedding` se deja None en el MVP; se popula en fase 2 para búsqueda semántica.
-    `importancia` decae con el tiempo; cuando cae bajo umbral deja de recuperarse.
-    `vigencia` marca la fecha tras la cual puede borrarse físicamente si no se reactivó.
     """
     num: int
     relacion_id: int
     tipo: str                                       # "episodico" | "relacional"
+    categoria: str                                  # "hecho_puntual" | "rasgo" | "hito" | "estado_temporal"
     contenido: str
     origen: str                                     # "sistema" | "llm"
     importancia: float                              # [0.0, 1.0]
     fecha_creacion: datetime
     ultima_relevancia: datetime
-    vigencia: datetime
+    emocion_asociada_id: str                        # FK -> Emocion.codigo; "neutro" si sin carga
+    emocion_asociada_intensidad: float              # [0.0, 1.0]; 0.0 si neutro
+    vigencia: Optional[datetime] = None             # None = permanente; fecha = caduca
     evento_id: Optional[int] = None                 # FK -> Evento.num
-    emocion_asociada_id: Optional[str] = None       # FK -> Emocion.codigo
-    emocion_asociada_intensidad: Optional[float] = None
     embedding: Optional[list[float]] = None         # NULL en MVP — fase 2
 
 
@@ -245,3 +253,45 @@ class Conflicto:
     causa: str
     estado: str           # "activo" | "escalado" | "latente" | "resuelto"
     resolucion: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Lógica de vigencia para Recuerdo
+# ---------------------------------------------------------------------------
+
+def calcular_vigencia(
+    categoria: str,
+    importancia: float,
+    emocion_intensidad: float,
+    fecha_creacion: datetime,
+) -> Optional[datetime]:
+    """
+    Calcula la vigencia de un recuerdo de forma determinista.
+
+    Reglas (en orden de precedencia):
+      1. Si `importancia` >= umbral_permanencia → None (permanente).
+      2. Si `emocion_intensidad` >= umbral_permanencia → None (permanente).
+      3. Si `categoria` es "rasgo" o "hito" → None (permanente por diseño).
+      4. Si `categoria` es "hecho_puntual" → fecha_creacion + vigencia_dias_hecho_puntual.
+      5. Si `categoria` es "estado_temporal" → fecha_creacion + vigencia_dias_estado_temporal.
+    """
+    from dominio.configuracion import cfg
+    from datetime import timedelta
+
+    if (
+        importancia >= cfg.recuerdos.umbral_permanencia
+        or emocion_intensidad >= cfg.recuerdos.umbral_permanencia
+    ):
+        return None
+
+    if categoria in ("rasgo", "hito"):
+        return None
+
+    if categoria == "hecho_puntual":
+        return fecha_creacion + timedelta(days=cfg.recuerdos.vigencia_dias_hecho_puntual)
+
+    if categoria == "estado_temporal":
+        return fecha_creacion + timedelta(days=cfg.recuerdos.vigencia_dias_estado_temporal)
+
+    # Categoría desconocida: tratar como hecho_puntual por seguridad
+    return fecha_creacion + timedelta(days=cfg.recuerdos.vigencia_dias_hecho_puntual)

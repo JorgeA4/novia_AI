@@ -41,7 +41,9 @@
   },
 
   "recuerdos": {
-    "vigencia_dias": 30
+    "vigencia_dias_hecho_puntual": 30,
+    "vigencia_dias_estado_temporal": 14,
+    "umbral_permanencia": 0.85
   },
 
   "transicion_etapa": {
