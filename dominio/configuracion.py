@@ -84,6 +84,11 @@ class ConfigRelacion:
     cap_cotidiano: float
     cap_significativo: float
     impulso_disposicion_base: float
+    familiaridad_peso_perfil: float
+    familiaridad_peso_recuerdos: float
+    familiaridad_escala_perfil: float       # nº de entradas de perfil que equivale a familiaridad=1.0 (antes de raíz)
+    familiaridad_escala_recuerdos: float    # nº de recuerdos que equivale a familiaridad=1.0 (antes de raíz)
+    familiaridad_semivida_dias: float       # días para que la familiaridad sin interacción baje a la mitad
 
 
 @dataclass(frozen=True)

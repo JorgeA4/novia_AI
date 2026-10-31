@@ -131,6 +131,7 @@ familiaridad        → FLOAT (0.0 – 1.0)
 tension             → FLOAT (0.0 – 1.0)
 disposicion         → FLOAT (0.0 – 1.0)
 disposicion_delta   → FLOAT (-1.0 – 1.0)
+instrucciones_llm   → STR (opcional — None si no hay instrucciones)
 
 ------------------------------------------------------
 

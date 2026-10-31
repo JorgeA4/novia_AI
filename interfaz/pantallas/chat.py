@@ -74,6 +74,8 @@ class PantallaChat(Screen):
     #campo-input {
         width: 1fr;
         margin-right: 1;
+        color: $text;
+        background: $surface;
     }
 
     #boton-enviar {

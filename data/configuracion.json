@@ -8,7 +8,7 @@
   },
 
   "presion_turno": {
-    "factor_presion_base": 0.015,
+    "factor_presion_base": 0.04,
     "centroide_moderacion": 0.65,
     "amplitud_moderacion": 0.35
   },
@@ -37,7 +37,12 @@
     "umbral_impulso_automatico": 0.15,
     "cap_cotidiano": 0.03,
     "cap_significativo": 0.10,
-    "impulso_disposicion_base": 0.01
+    "impulso_disposicion_base": 0.01,
+    "familiaridad_peso_perfil": 0.70,
+    "familiaridad_peso_recuerdos": 0.30,
+    "familiaridad_escala_perfil": 200.0,
+    "familiaridad_escala_recuerdos": 150.0,
+    "familiaridad_semivida_dias": 60.0
   },
 
   "recuerdos": {

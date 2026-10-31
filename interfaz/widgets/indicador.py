@@ -6,6 +6,7 @@ Se actualiza después de cada turno con los valores más recientes.
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label, Static
@@ -92,7 +93,7 @@ class IndicadorEstado(Widget):
     def compose(self) -> ComposeResult:
         yield Label("Estado de la relación", classes="indicador-titulo")
         yield Label("Etapa:", classes="indicador-etiqueta")
-        yield Label(self._etapa, id="ind-etapa", classes="indicador-valor")
+        yield Label(self._etapa, id="ind-etapa", classes="indicador-valor", markup=False)
 
         yield Static("─" * 24, classes="indicador-separador")
         yield Label("── Capas emocionales ──", classes="indicador-subtitulo")
@@ -101,30 +102,33 @@ class IndicadorEstado(Widget):
             self._fmt_capa(self._emocion, self._emocion_int),
             id="ind-emocion",
             classes="indicador-valor",
+            markup=False,
         )
         yield Label("Estado de ánimo:", classes="indicador-etiqueta")
         yield Label(
             self._fmt_capa(self._estado_animo, self._estado_animo_int),
             id="ind-estado-animo",
             classes="indicador-valor-animo",
+            markup=False,
         )
         yield Label("Sentimiento:", classes="indicador-etiqueta")
         yield Label(
             self._fmt_capa(self._sentimiento, self._sentimiento_int),
             id="ind-sentimiento",
             classes="indicador-valor-sent",
+            markup=False,
         )
 
         yield Static("─" * 24, classes="indicador-separador")
         yield Label("── Métricas ──", classes="indicador-subtitulo")
         yield Label("Confianza:", classes="indicador-etiqueta")
-        yield Label(self._barra(self._confianza), id="ind-confianza", classes="indicador-barra")
+        yield Label(self._barra(self._confianza), id="ind-confianza", classes="indicador-barra", markup=False)
         yield Label("Afecto:", classes="indicador-etiqueta")
-        yield Label(self._barra(self._afecto), id="ind-afecto", classes="indicador-barra")
+        yield Label(self._barra(self._afecto), id="ind-afecto", classes="indicador-barra", markup=False)
         yield Label("Familiaridad:", classes="indicador-etiqueta")
-        yield Label(self._barra(self._familiaridad), id="ind-familiaridad", classes="indicador-barra")
+        yield Label(self._barra(self._familiaridad), id="ind-familiaridad", classes="indicador-barra", markup=False)
         yield Label("Tensión:", classes="indicador-etiqueta")
-        yield Label(self._barra(self._tension), id="ind-tension", classes="indicador-barra-tension")
+        yield Label(self._barra(self._tension), id="ind-tension", classes="indicador-barra-tension", markup=False)
 
     def actualizar(
         self,
@@ -153,20 +157,20 @@ class IndicadorEstado(Widget):
         self._familiaridad = familiaridad
         self._tension = tension
 
-        self.query_one("#ind-etapa", Label).update(etapa)
+        self.query_one("#ind-etapa", Label).update(Text(etapa))
         self.query_one("#ind-emocion", Label).update(
-            self._fmt_capa(emocion, emocion_int)
+            Text(self._fmt_capa(emocion, emocion_int))
         )
         self.query_one("#ind-estado-animo", Label).update(
-            self._fmt_capa(estado_animo, estado_animo_int)
+            Text(self._fmt_capa(estado_animo, estado_animo_int))
         )
         self.query_one("#ind-sentimiento", Label).update(
-            self._fmt_capa(sentimiento, sentimiento_int)
+            Text(self._fmt_capa(sentimiento, sentimiento_int))
         )
-        self.query_one("#ind-confianza", Label).update(self._barra(confianza))
-        self.query_one("#ind-afecto", Label).update(self._barra(afecto))
-        self.query_one("#ind-familiaridad", Label).update(self._barra(familiaridad))
-        self.query_one("#ind-tension", Label).update(self._barra(tension))
+        self.query_one("#ind-confianza", Label).update(Text(self._barra(confianza)))
+        self.query_one("#ind-afecto", Label).update(Text(self._barra(afecto)))
+        self.query_one("#ind-familiaridad", Label).update(Text(self._barra(familiaridad)))
+        self.query_one("#ind-tension", Label).update(Text(self._barra(tension)))
 
     @staticmethod
     def _barra(valor: float, ancho: int = 20) -> str:

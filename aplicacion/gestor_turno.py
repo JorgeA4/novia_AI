@@ -39,6 +39,8 @@ from dominio.relacion import (
     aplicar_deltas_turno,
     buscar_transicion_elegible,
     calcular_delta_disposicion,
+    decaer_familiaridad,
+    recalcular_familiaridad,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
 from repositorios.json.factoria import Repositorios
@@ -142,10 +144,11 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 3. Decaimiento emocional (incluye deriva del sentimiento — Brecha 3) ---
+        # --- 3. Decaimiento emocional + familiar (incluye deriva del sentimiento — Brecha 3) ---
         segundos = (ahora - estado.ultima_interaccion).total_seconds()
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
+            relacion = decaer_familiaridad(relacion, segundos)
 
         # --- 4. Construir contexto ---
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
@@ -169,6 +172,7 @@ class GestorTurno:
             recuerdos=recuerdos,
             perfil_usuario=perfil,
             nombre_usuario=usuario.nombre,
+            instrucciones_llm=relacion.instrucciones_llm,
         )
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
@@ -228,7 +232,7 @@ class GestorTurno:
         deltas = DeltasRelacion(
             afecto=_extraer_delta("afecto"),
             confianza=_extraer_delta("confianza"),
-            familiaridad=_extraer_delta("familiaridad"),
+            # familiaridad ya no viene del LLM — se recalcula en 8d
             tension=_extraer_delta("tension"),
             # disposicion se deriva de las tendencias de afecto y confianza
             # tras aplicar los deltas anteriores — se calcula abajo
@@ -241,7 +245,7 @@ class GestorTurno:
         deltas_disposicion = DeltasRelacion(disposicion=delta_disposicion)
         relacion = aplicar_deltas_turno(relacion, deltas_disposicion)
 
-        impacto_neto = (deltas.afecto + deltas.confianza + deltas.familiaridad - deltas.tension) / 4.0
+        impacto_neto = (deltas.afecto + deltas.confianza - deltas.tension) / 3.0
         repos.evento.guardar(Evento(
             num=0,
             relacion_id=relacion_id,
@@ -249,7 +253,6 @@ class GestorTurno:
             descripcion=(
                 f"Interacción: afecto={deltas.afecto:+.2f} "
                 f"conf={deltas.confianza:+.2f} "
-                f"fam={deltas.familiaridad:+.2f} "
                 f"tens={deltas.tension:+.2f} "
                 f"disp={delta_disposicion:+.4f}"
             ),
@@ -335,6 +338,14 @@ class GestorTurno:
                         repos.perfil_usuario.guardar(nueva)
             except (KeyError, TypeError, ValueError):
                 pass  # dato malformado — ignorar silenciosamente
+
+        # --- 8d. Recalcular familiaridad desde perfil y recuerdos ---
+        # Se hace aquí, después de haber persistido nuevas entradas de perfil y recuerdos,
+        # para que el cálculo incluya lo aprendido en este turno.
+        perfil_actualizado = repos.perfil_usuario.listar_por_relacion(relacion_id)
+        recuerdos_actualizados = repos.recuerdo.listar_por_relacion(relacion_id)
+        relacion = recalcular_familiaridad(relacion, perfil_actualizado, recuerdos_actualizados)
+        repos.relacion.guardar(relacion)
 
         # --- 9 & 10. Evaluar y aplicar transición de etapa ---
         transicion_aplicada = False

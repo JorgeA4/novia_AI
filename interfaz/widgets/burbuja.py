@@ -61,4 +61,4 @@ class BurbujaMensaje(Widget):
         self._contenido = contenido
 
     def compose(self) -> ComposeResult:
-        yield Label(self._contenido, classes="burbuja-texto")
+        yield Label(self._contenido, classes="burbuja-texto", markup=False)

@@ -65,13 +65,16 @@ def _resistencia(valor: float) -> float:
     """
     Factor de resistencia al cambio según la posición actual de la métrica.
 
-    Fórmula: 4 × valor × (1 − valor)
+    Fórmula: max(0.05, 4 × valor × (1 − valor))
         — máxima (1.0) en valor=0.5  → cambio más fácil en el centro
-        — mínima (0.0) en valor=0 y 1 → cambio casi imposible en extremos
+        — mínima (0.05) en valor=0 y 1 → cambio muy lento en extremos, pero posible
+
+    El piso de 0.05 evita que métricas en 0.0 (como tensión al inicio) queden
+    permanentemente bloqueadas sin poder cambiar.
 
     El resultado escala el impacto_base: impacto_real = impacto_base × resistencia.
     """
-    return 4.0 * valor * (1.0 - valor)
+    return max(0.05, 4.0 * valor * (1.0 - valor))
 
 
 def _aplicar_cambio(valor_actual: float, impacto_base: float, cap: Optional[float] = None) -> tuple[float, float]:
@@ -422,3 +425,70 @@ def calcular_interes_actual(
         + factor_tiempo      * 0.15
     )
     return _recortar(interes)
+
+
+# ---------------------------------------------------------------------------
+# Familiaridad — recalculo desde perfil/recuerdos y decaimiento temporal
+# ---------------------------------------------------------------------------
+
+def recalcular_familiaridad(
+    relacion: Relacion,
+    perfil_usuario: "list[PerfilUsuario]",
+    recuerdos: "list[Recuerdo]",
+) -> Relacion:
+    """
+    Recalcula `familiaridad` a partir de las fuentes de conocimiento acumulado,
+    ignorando el delta que pueda haber reportado el LLM.
+
+    Fórmula:
+        señal_perfil    = sqrt(n_entradas_usuario / escala_perfil)
+        señal_recuerdos = sqrt(suma_importancia_recuerdos / escala_recuerdos)
+        familiaridad_base = clip(
+            señal_perfil    × peso_perfil
+            + señal_recuerdos × peso_recuerdos,
+            0.0, 1.0
+        )
+
+    Solo sube — el decaimiento temporal lo aplica `decaer_familiaridad`.
+    Solo cuenta entradas de sujeto "usuario" del perfil (lo que sabe de esta persona).
+    """
+    from dominio.modelos import PerfilUsuario, Recuerdo
+    from dominio.confianza import confianza_final_de
+    import math as _math
+
+    cfg_r = cfg.relacion
+
+    entradas_usuario = [p for p in perfil_usuario if p.sujeto == "usuario"]
+    n_perfil = sum(confianza_final_de(p) for p in entradas_usuario)
+    señal_perfil = _math.sqrt(max(0.0, n_perfil) / cfg_r.familiaridad_escala_perfil)
+
+    suma_importancia = sum(r.importancia for r in recuerdos)
+    señal_recuerdos = _math.sqrt(max(0.0, suma_importancia) / cfg_r.familiaridad_escala_recuerdos)
+
+    familiaridad_base = _recortar(
+        señal_perfil    * cfg_r.familiaridad_peso_perfil
+        + señal_recuerdos * cfg_r.familiaridad_peso_recuerdos
+    )
+
+    # Solo puede subir — si la base calculada es menor que la actual, no tocar
+    nueva_familiaridad = max(relacion.familiaridad, familiaridad_base)
+
+    return replace(relacion, familiaridad=nueva_familiaridad)
+
+
+def decaer_familiaridad(
+    relacion: Relacion,
+    segundos_transcurridos: float,
+) -> Relacion:
+    """
+    Aplica decaimiento exponencial a `familiaridad` según el tiempo sin interacción.
+
+    La semivida configurada es de 60 días por defecto — muy lenta, pero perceptible
+    tras semanas/meses de silencio. No decae por debajo de 0.0.
+    """
+    import math as _math
+
+    semivida_segundos = cfg.relacion.familiaridad_semivida_dias * 86400.0
+    tasa = _math.log(2) / semivida_segundos
+    nueva = relacion.familiaridad * _math.exp(-tasa * segundos_transcurridos)
+    return replace(relacion, familiaridad=_recortar(nueva))

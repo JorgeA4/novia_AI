@@ -123,6 +123,7 @@ def _dict_a_relacion(d: dict) -> Relacion:
         tension=d["tension"],
         disposicion=d.get("disposicion", 0.5),
         disposicion_delta=d.get("disposicion_delta", 0.0),
+        instrucciones_llm=d.get("instrucciones_llm") or None,
     )
 
 

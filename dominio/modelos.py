@@ -132,6 +132,7 @@ class Relacion:
     tension: float          # [0.0, 1.0]
     disposicion: float      # [0.0, 1.0] — tendencia base a buscar contacto
     disposicion_delta: float  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
+    instrucciones_llm: Optional[str] = None  # instrucciones de estilo/comportamiento para el LLM
 
 
 @dataclass

@@ -20,11 +20,14 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 def leer_json(ruta: Path) -> Any:
-    """Lee un fichero JSON. Devuelve [] si no existe."""
+    """Lee un fichero JSON. Devuelve [] si no existe o está vacío."""
     if not ruta.exists():
         return []
     with ruta.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        contenido = f.read().strip()
+    if not contenido:
+        return []
+    return json.loads(contenido)
 
 
 def escribir_json(ruta: Path, datos: Any) -> None:

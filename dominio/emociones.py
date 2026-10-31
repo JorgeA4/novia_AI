@@ -198,7 +198,7 @@ def aplicar_presion_emocion_sobre_animo(
     sobre el estado_animo, moderada por el sentimiento vigente.
 
     Flujo:
-        1. Calcular presion_turno = valencia_emocion × intensidad × factor_presion_base
+        1. Calcular presion_turno = intensidad² × factor_presion_base
         2. Calcular factor_moderacion mediante similitud coseno(emocion, sentimiento)
         3. presion_real = presion_turno × factor_moderacion
         4. Mover el vector del estado_animo actual en la dirección del vector de la emoción
@@ -208,7 +208,9 @@ def aplicar_presion_emocion_sobre_animo(
 
     Este mecanismo cumple los tres requisitos del diseño:
         - Acumulación: se llama en cada turno; muchos turnos suman presión.
-        - Resistencia: factor_presion_base = 0.015 → un turno mueve ~1.5%.
+        - No linealidad: la presión es proporcional a intensidad² — emociones leves
+          (≤0.3) apenas mueven el ánimo; emociones fuertes (≥0.7) lo empujan
+          significativamente, y si se sostienen varias veces, acumulan de forma marcada.
         - Freno del sentimiento: emociones contrarias al sentimiento se amortiguan a ~30%.
     """
     emocion_obj = _buscar_en_catalogo(catalogo, nueva_emocion_id)
@@ -219,16 +221,18 @@ def aplicar_presion_emocion_sobre_animo(
     vector_animo = calcular_vector_capa(estado_animo_obj, estado.estado_animo_intensidad)
     vector_sentimiento = calcular_vector_capa(sentimiento_obj, estado.sentimiento_intensidad)
 
-    # Presión bruta del turno (Brecha 1)
+    # Presión bruta del turno (Brecha 1): no lineal por intensidad²
+    # — un turno casual (intensidad≈0.3) produce presión mínima (0.09×base)
+    # — un turno intenso (intensidad≈0.8) produce presión alta (0.64×base)
     presion_bruta = (
-        emocion_obj.valencia * nueva_emocion_intensidad
+        nueva_emocion_intensidad ** 2
         * cfg.presion_turno.factor_presion_base
     )
 
     # Factor de moderación por sentimiento (Brecha 2)
     factor_moderacion = calcular_factor_moderacion(vector_emocion, vector_sentimiento)
 
-    presion_real = abs(presion_bruta) * factor_moderacion
+    presion_real = presion_bruta * factor_moderacion
 
     # Mover el vector del estado_animo en dirección al vector de la emoción
     # La presión es una fracción del camino desde la posición actual hacia la emoción

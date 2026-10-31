@@ -52,6 +52,7 @@ def construir_sistema(
     recuerdos: list[Recuerdo],
     perfil_usuario: list[PerfilUsuario],
     nombre_usuario: str,
+    instrucciones_llm: str | None = None,
 ) -> str:
     """
     Construye el mensaje de sistema que define al personaje para el LLM.
@@ -76,10 +77,7 @@ def construir_sistema(
 
     # --- Psicología ---
     secciones.append(
-        f"Perfil psicológico:\n"
-        f"  - MBTI: {mbti.siglas} — {mbti.descripcion}\n"
-        f"  - Eneagrama: {eneagrama.siglas} — {eneagrama.descripcion}\n"
-        f"  - Temperamento: {temperamento.nombre} — {temperamento.descripcion}"
+        f"Perfil psicológico: {mbti.siglas} · {eneagrama.siglas} · {temperamento.nombre}"
     )
 
     # --- Valores y gustos ---
@@ -161,6 +159,10 @@ def construir_sistema(
 
         secciones.append("Lo que sabes de las personas relevantes:\n" + "\n".join(bloques))
 
+    # --- Instrucciones de comportamiento del usuario ---
+    if instrucciones_llm:
+        secciones.append(f"Instrucciones de comportamiento:\n{instrucciones_llm}")
+
     # --- Instrucción de formato de respuesta ---
     codigos_emocion = ", ".join(
         e.codigo for e in catalogo_emociones if e.capa in ("emocion", "cualquiera")
@@ -178,13 +180,12 @@ def construir_sistema(
         "  estado_animo_intensidad (float 0.0–1.0) — intensidad del estado de ánimo\n"
         "  afecto              (float -1.0–1.0) — cambio en el cariño/apego emocional\n"
         "  confianza           (float -1.0–1.0) — cambio en la confianza y apertura mutua\n"
-        "  familiaridad        (float -1.0–1.0) — cambio en la comodidad y conocimiento acumulado\n"
         "  tension             (float -1.0–1.0) — cambio en la tensión (positivo = más tensión)\n"
         "  recuerdos           (array) — lista de recuerdos a guardar; vacía [] si no hay nada memorable\n"
         "  perfil              (array) — lista de datos factuales aprendidos del usuario; vacía [] si ninguno\n\n"
         "Guía para los deltas de relación (+0.3 = efecto notable positivo, 0.0 = sin cambio, "
-        "-0.3 = efecto notable negativo). Las cuatro dimensiones son independientes.\n"
-        "La disposición a buscar contacto la calcula el sistema — no la incluyas en tu respuesta.\n\n"
+        "-0.3 = efecto notable negativo). Las tres dimensiones son independientes.\n"
+        "La familiaridad y la disposición a buscar contacto las calcula el sistema — no las incluyas en tu respuesta.\n\n"
         f"Valores válidos para emocion_id: {codigos_emocion}\n"
         f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n"
         f"Valores válidos para emocion_asociada_id en recuerdos: neutro, {codigos_emocion}, {codigos_estado_animo}\n\n"
