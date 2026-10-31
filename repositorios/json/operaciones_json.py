@@ -54,6 +54,11 @@ class MensajeJson:
             todos = todos[-limite:]
         return todos
 
+    def eliminar_por_relacion(self, relacion_id: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["relacion_id"] != relacion_id]
+        escribir_json(self._ruta, registros)
+
 
 def _dict_a_mensaje(d: dict) -> Mensaje:
     return Mensaje(
@@ -105,6 +110,11 @@ class EventoJson:
             for d in leer_json(self._ruta)
             if d["relacion_id"] == relacion_id
         ]
+
+    def eliminar_por_relacion(self, relacion_id: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["relacion_id"] != relacion_id]
+        escribir_json(self._ruta, registros)
 
 
 def _dict_a_evento(d: dict) -> Evento:
@@ -196,6 +206,12 @@ class ConflictoJsonConEventos(ConflictoJson):
             if d["relacion_id"] == relacion_id
         }
 
+    def eliminar_por_relacion(self, relacion_id: int) -> None:
+        ids_eventos = self._ids_eventos_de_relacion(relacion_id)
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["evento_id"] not in ids_eventos]
+        escribir_json(self._ruta, registros)
+
 
 # ---------------------------------------------------------------------------
 # Recuerdo
@@ -236,6 +252,11 @@ class RecuerdoJson:
         d["ultima_relevancia"] = recuerdo.ultima_relevancia.isoformat()
         d["vigencia"] = recuerdo.vigencia.isoformat() if recuerdo.vigencia is not None else None
         registros.append(d)
+        escribir_json(self._ruta, registros)
+
+    def eliminar_por_relacion(self, relacion_id: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["relacion_id"] != relacion_id]
         escribir_json(self._ruta, registros)
 
     def listar_por_relacion(
@@ -315,6 +336,11 @@ class PerfilUsuarioJson:
     def eliminar(self, num: int) -> None:
         registros = leer_json(self._ruta)
         registros = [r for r in registros if r["num"] != num]
+        escribir_json(self._ruta, registros)
+
+    def eliminar_por_relacion(self, relacion_id: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["relacion_id"] != relacion_id]
         escribir_json(self._ruta, registros)
 
     def listar_por_relacion(

@@ -53,6 +53,7 @@ def construir_sistema(
     perfil_usuario: list[PerfilUsuario],
     nombre_usuario: str,
     instrucciones_llm: str | None = None,
+    temperamento_secundario: Temperamento | None = None,
 ) -> str:
     """
     Construye el mensaje de sistema que define al personaje para el LLM.
@@ -76,8 +77,11 @@ def construir_sistema(
     )
 
     # --- Psicología ---
+    nombre_temperamento = temperamento.nombre
+    if temperamento_secundario is not None:
+        nombre_temperamento += f"-{temperamento_secundario.nombre}"
     secciones.append(
-        f"Perfil psicológico: {mbti.siglas} · {eneagrama.siglas} · {temperamento.nombre}"
+        f"Perfil psicológico: {mbti.siglas} · {eneagrama.siglas} · {nombre_temperamento}"
     )
 
     # --- Valores y gustos ---
@@ -92,9 +96,9 @@ def construir_sistema(
     # Línea de tendencias: solo incluye las métricas con _delta significativo (≥ 0.01)
     tendencias: list[str] = []
     for nombre_campo, valor_delta in (
-        ("confianza", relacion.confianza_delta),
-        ("afecto",    relacion.afecto_delta),
-        ("disp",      relacion.disposicion_delta),
+        ("confianza",           relacion.confianza_delta),
+        ("afecto",              relacion.afecto_delta),
+        ("interes_por_hablar",  relacion.disposicion_delta),
     ):
         if abs(valor_delta) >= 0.01:
             tendencias.append(f"{nombre_campo}={valor_delta:+.2f}")
@@ -102,7 +106,7 @@ def construir_sistema(
     linea_metricas = (
         f"métricas  confianza={relacion.confianza:.2f}  afecto={relacion.afecto:.2f}"
         f"  familiaridad={relacion.familiaridad:.2f}  tension={relacion.tension:.2f}"
-        f"  disp={relacion.disposicion:.2f}"
+        f"  interes_por_hablar={relacion.disposicion:.2f}"
     )
     linea_tendencias = (
         ("tendencia " + "  ".join(tendencias)) if tendencias else ""
@@ -185,7 +189,7 @@ def construir_sistema(
         "  perfil              (array) — lista de datos factuales aprendidos del usuario; vacía [] si ninguno\n\n"
         "Guía para los deltas de relación (+0.3 = efecto notable positivo, 0.0 = sin cambio, "
         "-0.3 = efecto notable negativo). Las tres dimensiones son independientes.\n"
-        "La familiaridad y la disposición a buscar contacto las calcula el sistema — no las incluyas en tu respuesta.\n\n"
+        "La familiaridad y el interes_por_hablar los calcula el sistema — no los incluyas en tu respuesta.\n\n"
         f"Valores válidos para emocion_id: {codigos_emocion}\n"
         f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n"
         f"Valores válidos para emocion_asociada_id en recuerdos: neutro, {codigos_emocion}, {codigos_estado_animo}\n\n"

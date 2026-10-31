@@ -110,6 +110,7 @@ class Personaje:
     mbti_id: str
     eneagrama_id: str
     temperamento_id: str
+    temperamento_secundario_id: Optional[str] = None
 
 
 @dataclass

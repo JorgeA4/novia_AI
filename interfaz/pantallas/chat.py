@@ -35,6 +35,7 @@ class PantallaChat(Screen):
     BINDINGS = [
         ("ctrl+q", "app.quit", "Salir"),
         ("ctrl+e", "toggle_estado", "Panel estado"),
+        ("escape", "volver_menu", "Menú"),
     ]
 
     DEFAULT_CSS = """
@@ -69,6 +70,11 @@ class PantallaChat(Screen):
         align: left middle;
         background: $surface-darken-1;
         border-top: solid $surface-lighten-1;
+    }
+
+    #boton-menu {
+        width: auto;
+        margin-right: 1;
     }
 
     #campo-input {
@@ -107,6 +113,7 @@ class PantallaChat(Screen):
             with Vertical(id="panel-estado"):
                 yield IndicadorEstado()
         with Horizontal(id="barra-input"):
+            yield Button("← Menú", variant="default", id="boton-menu")
             yield Input(placeholder="Escribe un mensaje…", id="campo-input")
             yield Label("pensando…", id="etiqueta-pensando")
             yield Button("Enviar", variant="primary", id="boton-enviar")
@@ -158,6 +165,10 @@ class PantallaChat(Screen):
             familiaridad=relacion.familiaridad,
             tension=relacion.tension,
         )
+
+    @on(Button.Pressed, "#boton-menu")
+    def _al_pulsar_menu(self) -> None:
+        self.app.pop_screen()
 
     @on(Button.Pressed, "#boton-enviar")
     def _al_pulsar_enviar(self) -> None:
@@ -239,3 +250,7 @@ class PantallaChat(Screen):
         """Ctrl+E: mostrar/ocultar el panel lateral de estado."""
         panel = self.query_one("#panel-estado", Vertical)
         panel.toggle_class("oculto")
+
+    def action_volver_menu(self) -> None:
+        """Escape: volver al menú principal."""
+        self.app.pop_screen()

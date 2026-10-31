@@ -3,17 +3,18 @@ Gestor de turno — orquesta el caso de uso principal del sistema.
 
 Flujo de un turno:
     1. Recibir el mensaje del usuario.
-    2. Guardar MENSAJE (rol: usuario).
-    3. Calcular segundos desde la última interacción y aplicar decaimiento al ESTADO.
-    4. Construir el contexto para el LLM.
-    5. Llamar al LLM → obtener un único JSON con respuesta, estado emocional,
+    2. Cargar historial de mensajes previos (ANTES de guardar el turno actual).
+    3. Guardar MENSAJE (rol: usuario).
+    4. Calcular segundos desde la última interacción y aplicar decaimiento al ESTADO.
+    5. Construir el contexto para el LLM.
+    6. Llamar al LLM → obtener un único JSON con respuesta, estado emocional,
        deltas de relación, recuerdos candidatos y datos de perfil del usuario.
-    6. Guardar MENSAJE (rol: personaje).
-    7. Persistir el ESTADO decaído con las emociones inferidas.
-    8. Persistir recuerdos y datos de perfil extraídos.
-    9. Evaluar si hay transición de etapa elegible.
-   10. Si hay impulso automático → aplicar transición y registrar EVENTO.
-   11. Devolver la respuesta para que la interfaz la muestre.
+    7. Guardar MENSAJE (rol: personaje).
+    8. Persistir el ESTADO decaído con las emociones inferidas.
+    9. Persistir recuerdos y datos de perfil extraídos.
+   10. Evaluar si hay transición de etapa elegible.
+   11. Si hay impulso automático → aplicar transición y registrar EVENTO.
+   12. Devolver la respuesta para que la interfaz la muestre.
 
 Regla: este módulo no importa nada de interfaz ni de JSON/SQL directamente.
 """
@@ -135,7 +136,11 @@ class GestorTurno:
         estado = repos.estado.obtener(relacion_id)
         catalogo_emociones = repos.catalogos.obtener_emociones()
 
-        # --- 2. Guardar mensaje del usuario ---
+        # --- 2. Cargar historial ANTES de guardar el mensaje del usuario ---
+        # (el historial debe reflejar la conversación previa, no el turno actual)
+        mensajes_previos = repos.mensaje.listar_por_relacion(relacion_id)
+
+        # --- 3. Guardar mensaje del usuario ---
         repos.mensaje.guardar(Mensaje(
             num=0,
             relacion_id=relacion_id,
@@ -144,22 +149,26 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 3. Decaimiento emocional + familiar (incluye deriva del sentimiento — Brecha 3) ---
+        # --- 4. Decaimiento emocional + familiar (incluye deriva del sentimiento — Brecha 3) ---
         segundos = (ahora - estado.ultima_interaccion).total_seconds()
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
             relacion = decaer_familiaridad(relacion, segundos)
 
-        # --- 4. Construir contexto ---
+        # --- 5. Construir contexto ---
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
         mbtis = {m.codigo: m for m in repos.catalogos.obtener_mbti()}
         eneagramas = {e.codigo: e for e in repos.catalogos.obtener_eneagramas()}
         temperamentos = {t.codigo: t for t in repos.catalogos.obtener_temperamentos()}
 
-        mensajes_previos = repos.mensaje.listar_por_relacion(relacion_id)
         recuerdos = repos.recuerdo.listar_por_relacion(relacion_id)
         perfil = repos.perfil_usuario.listar_por_relacion(relacion_id)
 
+        temp_secundario = (
+            temperamentos[personaje.temperamento_secundario_id]
+            if personaje.temperamento_secundario_id is not None
+            else None
+        )
         sistema = construir_sistema(
             personaje=personaje,
             relacion=relacion,
@@ -173,17 +182,18 @@ class GestorTurno:
             perfil_usuario=perfil,
             nombre_usuario=usuario.nombre,
             instrucciones_llm=relacion.instrucciones_llm,
+            temperamento_secundario=temp_secundario,
         )
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
 
-        # --- 5. Llamar al LLM (única llamada del turno) ---
+        # --- 6. Llamar al LLM (única llamada del turno) ---
         texto_llm = self._llm.completar(payload)
         turno = _parsear_respuesta_turno(texto_llm)
 
         respuesta = turno["respuesta"]
 
-        # --- 6. Guardar respuesta del personaje ---
+        # --- 7. Guardar respuesta del personaje ---
         repos.mensaje.guardar(Mensaje(
             num=0,
             relacion_id=relacion_id,
@@ -192,7 +202,7 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 7. Actualizar estado emocional ---
+        # --- 8. Actualizar estado emocional ---
         codigos_emocion = {
             e.codigo for e in catalogo_emociones if e.capa in ("emocion", "cualquiera")
         }
@@ -224,7 +234,7 @@ class GestorTurno:
         estado = replace(estado, ultima_interaccion=ahora)
         repos.estado.guardar(estado)
 
-        # --- 8a. Persistir deltas de relación ---
+        # --- 9a. Persistir deltas de relación ---
         def _extraer_delta(clave: str) -> float:
             v = turno.get(clave, 0.0)
             return max(-1.0, min(1.0, float(v)))
@@ -262,8 +272,8 @@ class GestorTurno:
         ))
         repos.relacion.guardar(relacion)
 
-        # --- 8b. Persistir recuerdos extraídos ---
-        # `recuerdos` ya está cargado arriba (paso 4); se usa para deduplicar.
+        # --- 9b. Persistir recuerdos extraídos ---
+        # `recuerdos` ya está cargado arriba (paso 5); se usa para deduplicar.
         # Se actualiza en cada iteración para que dos recuerdos del mismo turno
         # tampoco se dupliquen entre sí.
         categorias_validas = {"hecho_puntual", "rasgo", "hito", "estado_temporal"}
@@ -302,7 +312,7 @@ class GestorTurno:
             except (KeyError, TypeError, ValueError):
                 pass  # recuerdo malformado — ignorar silenciosamente
 
-        # --- 8c. Persistir datos de perfil extraídos ---
+        # --- 9c. Persistir datos de perfil extraídos ---
         sujetos_validos = {"usuario", "personaje"}
         for p in turno.get("perfil", []):
             try:
@@ -339,7 +349,7 @@ class GestorTurno:
             except (KeyError, TypeError, ValueError):
                 pass  # dato malformado — ignorar silenciosamente
 
-        # --- 8d. Recalcular familiaridad desde perfil y recuerdos ---
+        # --- 9d. Recalcular familiaridad desde perfil y recuerdos ---
         # Se hace aquí, después de haber persistido nuevas entradas de perfil y recuerdos,
         # para que el cálculo incluya lo aprendido en este turno.
         perfil_actualizado = repos.perfil_usuario.listar_por_relacion(relacion_id)
@@ -347,7 +357,7 @@ class GestorTurno:
         relacion = recalcular_familiaridad(relacion, perfil_actualizado, recuerdos_actualizados)
         repos.relacion.guardar(relacion)
 
-        # --- 9 & 10. Evaluar y aplicar transición de etapa ---
+        # --- 10 & 11. Evaluar y aplicar transición de etapa ---
         transicion_aplicada = False
         etapa_anterior = None
         etapa_nueva = None

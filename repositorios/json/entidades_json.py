@@ -53,6 +53,7 @@ def _dict_a_personaje(d: dict) -> Personaje:
         mbti_id=d["mbti_id"],
         eneagrama_id=d["eneagrama_id"],
         temperamento_id=d["temperamento_id"],
+        temperamento_secundario_id=d.get("temperamento_secundario_id") or None,
     )
 
 

@@ -38,7 +38,7 @@ from textual.app import App, ComposeResult
 from aplicacion.cliente_llm import ClienteGemini, ClienteOpenAI, ClienteStub
 from aplicacion.gestor_turno import GestorTurno
 from dominio.modelos import Estado, Personaje, Relacion, Usuario
-from interfaz.pantallas.chat import PantallaChat
+from interfaz.pantallas.menu_principal import MenuPrincipal
 from repositorios.json.factoria import Repositorios, crear_repositorios
 
 
@@ -160,7 +160,7 @@ class NoviApp(App):
     def on_mount(self) -> None:
         """Al montar, ajustar subtítulo con el proveedor activo."""
         self.SUB_TITLE = _nombre_proveedor_activo()
-        self.push_screen(PantallaChat(self._gestor, relacion_id=1))
+        self.call_after_refresh(self.push_screen, MenuPrincipal(self._repos, self._gestor))
 
 
 # ---------------------------------------------------------------------------
