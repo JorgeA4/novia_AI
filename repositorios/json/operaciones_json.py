@@ -54,6 +54,9 @@ class MensajeJson:
             todos = todos[-limite:]
         return todos
 
+    def contar_por_relacion(self, relacion_id: int) -> int:
+        return sum(1 for d in leer_json(self._ruta) if d["relacion_id"] == relacion_id)
+
     def eliminar_por_relacion(self, relacion_id: int) -> None:
         registros = leer_json(self._ruta)
         registros = [r for r in registros if r["relacion_id"] != relacion_id]

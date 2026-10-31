@@ -57,33 +57,34 @@ CONDICIONES_TRANSICION: list[CondicionTransicion] = [
     CondicionTransicion(
         desde_id="desconocidos",
         hasta_id="conocidos",
-        familiaridad_min=0.20,
+        familiaridad_min=0.08,
     ),
     CondicionTransicion(
         desde_id="conocidos",
         hasta_id="amigos",
-        familiaridad_min=0.45,
-        confianza_min=0.35,
+        familiaridad_min=0.18,
+        confianza_min=0.30,
     ),
     CondicionTransicion(
         desde_id="amigos",
         hasta_id="amigos_cercanos",
-        confianza_min=0.55,
-        afecto_min=0.50,
+        familiaridad_min=0.30,
+        confianza_min=0.50,
+        afecto_min=0.45,
         tension_max=0.40,
     ),
     CondicionTransicion(
         desde_id="amigos_cercanos",
         hasta_id="interes_romantico",
-        confianza_min=0.65,
-        afecto_min=0.65,
+        confianza_min=0.60,
+        afecto_min=0.60,
         tension_max=0.25,
     ),
     CondicionTransicion(
         desde_id="interes_romantico",
         hasta_id="pareja",
-        confianza_min=0.75,
-        afecto_min=0.80,
+        confianza_min=0.70,
+        afecto_min=0.75,
         tension_max=0.20,
     ),
     # Retrocesos
@@ -239,11 +240,17 @@ class GestorTurno:
             v = turno.get(clave, 0.0)
             return max(-1.0, min(1.0, float(v)))
 
+        def _extraer_tension() -> float:
+            # La tensión solo sube (viene del LLM en [0.0, 1.0]); valores negativos
+            # son errores del LLM — se descartan silenciosamente.
+            v = turno.get("tension", 0.0)
+            return max(0.0, min(1.0, float(v)))
+
         deltas = DeltasRelacion(
             afecto=_extraer_delta("afecto"),
             confianza=_extraer_delta("confianza"),
             # familiaridad ya no viene del LLM — se recalcula en 8d
-            tension=_extraer_delta("tension"),
+            tension=_extraer_tension(),
             # disposicion se deriva de las tendencias de afecto y confianza
             # tras aplicar los deltas anteriores — se calcula abajo
         )
@@ -349,12 +356,13 @@ class GestorTurno:
             except (KeyError, TypeError, ValueError):
                 pass  # dato malformado — ignorar silenciosamente
 
-        # --- 9d. Recalcular familiaridad desde perfil y recuerdos ---
+        # --- 9d. Recalcular familiaridad desde perfil, recuerdos y mensajes ---
         # Se hace aquí, después de haber persistido nuevas entradas de perfil y recuerdos,
         # para que el cálculo incluya lo aprendido en este turno.
         perfil_actualizado = repos.perfil_usuario.listar_por_relacion(relacion_id)
         recuerdos_actualizados = repos.recuerdo.listar_por_relacion(relacion_id)
-        relacion = recalcular_familiaridad(relacion, perfil_actualizado, recuerdos_actualizados)
+        n_mensajes = repos.mensaje.contar_por_relacion(relacion_id)
+        relacion = recalcular_familiaridad(relacion, perfil_actualizado, recuerdos_actualizados, n_mensajes)
         repos.relacion.guardar(relacion)
 
         # --- 10 & 11. Evaluar y aplicar transición de etapa ---

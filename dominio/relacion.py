@@ -435,6 +435,7 @@ def recalcular_familiaridad(
     relacion: Relacion,
     perfil_usuario: "list[PerfilUsuario]",
     recuerdos: "list[Recuerdo]",
+    n_mensajes: int = 0,
 ) -> Relacion:
     """
     Recalcula `familiaridad` a partir de las fuentes de conocimiento acumulado,
@@ -443,9 +444,11 @@ def recalcular_familiaridad(
     Fórmula:
         señal_perfil    = sqrt(n_entradas_usuario / escala_perfil)
         señal_recuerdos = sqrt(suma_importancia_recuerdos / escala_recuerdos)
+        señal_mensajes  = sqrt(n_mensajes / escala_mensajes)
         familiaridad_base = clip(
             señal_perfil    × peso_perfil
-            + señal_recuerdos × peso_recuerdos,
+            + señal_recuerdos × peso_recuerdos
+            + señal_mensajes  × peso_mensajes,
             0.0, 1.0
         )
 
@@ -465,9 +468,12 @@ def recalcular_familiaridad(
     suma_importancia = sum(r.importancia for r in recuerdos)
     señal_recuerdos = _math.sqrt(max(0.0, suma_importancia) / cfg_r.familiaridad_escala_recuerdos)
 
+    señal_mensajes = _math.sqrt(max(0.0, n_mensajes) / cfg_r.familiaridad_escala_mensajes)
+
     familiaridad_base = _recortar(
         señal_perfil    * cfg_r.familiaridad_peso_perfil
         + señal_recuerdos * cfg_r.familiaridad_peso_recuerdos
+        + señal_mensajes  * cfg_r.familiaridad_peso_mensajes
     )
 
     # Solo puede subir — si la base calculada es menor que la actual, no tocar

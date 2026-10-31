@@ -86,8 +86,10 @@ class ConfigRelacion:
     impulso_disposicion_base: float
     familiaridad_peso_perfil: float
     familiaridad_peso_recuerdos: float
+    familiaridad_peso_mensajes: float
     familiaridad_escala_perfil: float       # nº de entradas de perfil que equivale a familiaridad=1.0 (antes de raíz)
     familiaridad_escala_recuerdos: float    # nº de recuerdos que equivale a familiaridad=1.0 (antes de raíz)
+    familiaridad_escala_mensajes: float     # nº de mensajes que equivale a familiaridad=1.0 (antes de raíz)
     familiaridad_semivida_dias: float       # días para que la familiaridad sin interacción baje a la mitad
 
 

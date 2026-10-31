@@ -38,10 +38,12 @@
     "cap_cotidiano": 0.03,
     "cap_significativo": 0.10,
     "impulso_disposicion_base": 0.01,
-    "familiaridad_peso_perfil": 0.70,
+    "familiaridad_peso_perfil": 0.60,
     "familiaridad_peso_recuerdos": 0.30,
+    "familiaridad_peso_mensajes": 0.10,
     "familiaridad_escala_perfil": 200.0,
     "familiaridad_escala_recuerdos": 150.0,
+    "familiaridad_escala_mensajes": 800.0,
     "familiaridad_semivida_dias": 60.0
   },
 
