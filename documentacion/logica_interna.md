@@ -268,11 +268,16 @@ Secuencia completa al seleccionar recuerdos para el contexto del LLM:
 **Pre-paso 1 — descarte por vigencia:**
 Se descartan todos los recuerdos cuya `vigencia` haya expirado (`vigencia < ahora`). Un recuerdo expirado nunca llega al ranking ni al LLM. Solo los vigentes (o permanentes) continúan.
 
-**Pre-paso 2 — decaimiento:**
+**Pre-paso 2 — descarte por historial:**
+Se toman los últimos `contexto_llm.limite_historial` mensajes que recibirá el LLM. Se descartan los recuerdos cuyo `mensaje_origen_num` corresponda a uno de esos mensajes, porque ya están representados directamente en el contexto. Los recuerdos antiguos cuyo origen es `None` se conservan por compatibilidad.
+
+Este filtro usa mensajes reales, no turnos, por lo que sigue siendo correcto si hay mensajes sin respuesta, respuestas espontáneas o varios mensajes consecutivos del mismo rol.
+
+**Pre-paso 3 — decaimiento:**
 Se aplica la fórmula de decaimiento a `relevancia_activa` de cada recuerdo vigente (ver arriba).
 
 **Fase 1 — filtro semántico** *(requiere embeddings; fase 2 del proyecto)*:
-Solo pasan los recuerdos con similitud coseno `>= umbral_similitud_minima` (defecto: `0.25`).
+El mensaje del usuario se divide en oraciones o fragmentos delimitados por puntuación y saltos de línea. Se calcula un embedding para cada fragmento y, para cada recuerdo, se conserva la mayor similitud coseno obtenida entre sus fragmentos. Solo pasan los recuerdos con esa similitud máxima `>= umbral_similitud_minima` (defecto: `0.25`). Esto evita que oraciones irrelevantes diluyan la similitud de una oración que sí activa un recuerdo.
 Los recuerdos sin `embedding` (`embedding=None`, fase 1 del proyecto) se tratan con similitud `0.0` y solo pasan si el umbral es `0.0` (degradación graceful).
 
 **Fase 2 — ranking por señales intrínsecas:**

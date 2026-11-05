@@ -169,6 +169,8 @@ Memoria narrativa del personaje sobre la relación. Los datos factuales de perso
 
 `importancia` es una propiedad intrínseca y estable del recuerdo, asignada por el LLM al crearlo; no muta. `vigencia` es `None` para recuerdos permanentes; cuando tiene valor marca la fecha tras la cual el recuerdo se considera expirado y se descarta **antes** de cualquier proceso de recuperación — calculada por el sistema según `categoria`, nunca por el LLM. `embedding` se deja None en el MVP y se popula en fase 2 para búsqueda semántica.
 
+`mensaje_origen_num` vincula el recuerdo con el mensaje que provocó su creación. Permite saber si el recuerdo ya está representado en el historial que recibe el LLM, independientemente de si hubo respuesta del personaje o de cuántos mensajes compongan un turno. Es `None` para recuerdos antiguos o creados fuera de una conversación concreta.
+
 `relevancia_activa` es una propiedad dinámica e independiente de `importancia`: se inicializa al crear el recuerdo, decae exponencialmente con el tiempo sin uso, y recibe un boost cada vez que el recuerdo es seleccionado en una conversación. Su techo natural es siempre `importancia`.
 
 `emocion_asociada_id` e `emocion_asociada_intensidad` son **obligatorios**; usar `"neutro"` / `0.0` cuando no hay carga emocional.
@@ -199,6 +201,7 @@ fecha_creacion              → DATETIME
 ultima_relevancia           → DATETIME
 relevancia_activa           → FLOAT (0.0 – 1.0)  — decae con tiempo; boost al recuperar; techo = importancia
 vigencia                    → DATETIME (opcional — None = permanente; si expiró, se descarta)
+mensaje_origen_num          → INT (FK -> MENSAJE.num, opcional)
 ultima_recuperacion         → DATETIME (opcional — None si nunca fue recuperado)
 embedding                   → VECTOR (opcional — None en MVP, fase 2)
 

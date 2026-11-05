@@ -23,6 +23,7 @@ from textual.widgets import Button, Footer, Header, Input, Label
 
 from aplicacion.gestor_turno import GestorTurno, ResultadoTurno
 from interfaz.widgets.burbuja import BurbujaMensaje
+from interfaz.widgets.burbuja_diagnostico import BurbujaDiagnostico
 from interfaz.widgets.indicador import IndicadorEstado
 
 
@@ -35,6 +36,7 @@ class PantallaChat(Screen):
     BINDINGS = [
         ("ctrl+q", "app.quit", "Salir"),
         ("ctrl+e", "toggle_estado", "Panel estado"),
+        ("ctrl+t", "toggle_tester", "Modo tester"),
         ("escape", "volver_menu", "Menú"),
     ]
 
@@ -104,6 +106,7 @@ class PantallaChat(Screen):
         self._gestor = gestor
         self._relacion_id = relacion_id
         self._procesando = False
+        self._modo_tester = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -207,6 +210,11 @@ class PantallaChat(Screen):
         historial.mount(BurbujaMensaje("personaje", resultado.respuesta))
         historial.scroll_end(animate=True)
 
+        # Burbuja de diagnóstico (solo en modo tester)
+        if self._modo_tester and resultado.diagnostico is not None:
+            historial.mount(BurbujaDiagnostico(resultado.diagnostico))
+            historial.scroll_end(animate=True)
+
         if resultado.transicion_aplicada:
             aviso = (
                 f"✨ La relación ha avanzado: "
@@ -250,6 +258,14 @@ class PantallaChat(Screen):
         """Ctrl+E: mostrar/ocultar el panel lateral de estado."""
         panel = self.query_one("#panel-estado", Vertical)
         panel.toggle_class("oculto")
+
+    def action_toggle_tester(self) -> None:
+        """Ctrl+T: activar/desactivar el modo tester."""
+        self._modo_tester = not self._modo_tester
+        estado = "activado" if self._modo_tester else "desactivado"
+        historial = self.query_one("#historial", ScrollableContainer)
+        historial.mount(BurbujaMensaje("sistema", f"🔬 Modo tester {estado}"))
+        historial.scroll_end(animate=True)
 
     def action_volver_menu(self) -> None:
         """Escape: volver al menú principal."""

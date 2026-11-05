@@ -182,8 +182,14 @@ def extraer_json_de_respuesta(texto: str) -> Any | None:
     """
     Intenta extraer un objeto JSON del texto de respuesta del LLM.
 
-    El LLM puede incluir el JSON entre ```json ... ``` o directamente.
-    Devuelve None si no se encuentra JSON válido.
+    Estrategias en orden:
+        1. Bloque de código markdown ```json ... ```
+        2. Bloque de código genérico ``` ... ```
+        3. Parseo directo del texto completo
+        4. Extracción por primer '{' y último '}' del texto (captura JSON
+           envuelto en texto libre o con saltos de línea inesperados)
+
+    Devuelve None si ninguna estrategia produce JSON válido.
     """
     # Intentar con bloque de código markdown
     if "```json" in texto:
@@ -211,4 +217,16 @@ def extraer_json_de_respuesta(texto: str) -> Any | None:
     try:
         return json.loads(texto.strip())
     except json.JSONDecodeError:
-        return None
+        pass
+
+    # Extraer por primer '{' y último '}' — captura JSON envuelto en texto libre
+    inicio = texto.find("{")
+    fin = texto.rfind("}")
+    if inicio != -1 and fin > inicio:
+        fragmento = texto[inicio:fin + 1]
+        try:
+            return json.loads(fragmento)
+        except json.JSONDecodeError:
+            pass
+
+    return None

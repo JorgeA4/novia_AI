@@ -26,8 +26,8 @@ import math
 from datetime import datetime, timezone
 
 from dominio.configuracion import cfg
-from dominio.embedding import ServicioEmbedding
-from dominio.modelos import Recuerdo
+from dominio.embedding import ServicioEmbedding, dividir_en_fragmentos
+from dominio.modelos import Mensaje, Recuerdo
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +55,20 @@ def filtrar_vigentes(recuerdos: list[Recuerdo]) -> list[Recuerdo]:
         if vigencia > ahora:
             resultado.append(recuerdo)
     return resultado
+
+
+def filtrar_representados_en_historial(
+    recuerdos: list[Recuerdo],
+    mensajes_historial: list[Mensaje],
+) -> list[Recuerdo]:
+    """Descarta recuerdos cuyo mensaje de origen ya está en el historial del LLM."""
+    numeros_mensajes = {mensaje.num for mensaje in mensajes_historial}
+    return [
+        recuerdo
+        for recuerdo in recuerdos
+        if recuerdo.mensaje_origen_num is None
+        or recuerdo.mensaje_origen_num not in numeros_mensajes
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +139,9 @@ def seleccionar_recuerdos_relevantes(
     Devuelve los `k` recuerdos más adecuados para el contexto del LLM.
 
     Fase 1 — filtro semántico:
-        Solo pasan los recuerdos con similitud coseno >= umbral_similitud_minima.
+        El mensaje se divide en fragmentos y cada recuerdo usa la mayor similitud
+        coseno obtenida con cualquiera de ellos. Solo pasan los recuerdos con
+        similitud >= umbral_similitud_minima.
         Los recuerdos sin embedding (embedding=None) se tratan con similitud 0.0
         y solo pasan si el umbral es 0.0 (degradación graceful).
 
@@ -137,14 +153,20 @@ def seleccionar_recuerdos_relevantes(
     if not recuerdos:
         return []
 
-    embedding_mensaje = servicio.codificar(mensaje)
+    fragmentos = dividir_en_fragmentos(mensaje)
+    if not fragmentos:
+        return []
+    embeddings_fragmentos = servicio.codificar_multiples(fragmentos)
     umbral = cfg.embedding.umbral_similitud_minima
 
     # --- Fase 1: filtro semántico ---
     candidatos: list[Recuerdo] = []
     for recuerdo in recuerdos:
         if recuerdo.embedding is not None:
-            sim = servicio.similitud_coseno(embedding_mensaje, recuerdo.embedding)
+            sim = max(
+                servicio.similitud_coseno(embedding, recuerdo.embedding)
+                for embedding in embeddings_fragmentos
+            )
         else:
             sim = 0.0
         if sim >= umbral:

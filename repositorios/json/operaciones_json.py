@@ -25,7 +25,7 @@ class MensajeJson:
     def __init__(self, ruta: Path) -> None:
         self._ruta = ruta
 
-    def guardar(self, mensaje: Mensaje) -> None:
+    def guardar(self, mensaje: Mensaje) -> Mensaje:
         registros = leer_json(self._ruta)
         if mensaje.num == 0:
             mensaje = Mensaje(
@@ -40,6 +40,7 @@ class MensajeJson:
         d["fecha"] = mensaje.fecha.isoformat()
         registros.append(d)
         escribir_json(self._ruta, registros)
+        return mensaje
 
     def listar_por_relacion(
         self, relacion_id: int, limite: Optional[int] = None
@@ -259,6 +260,7 @@ class RecuerdoJson:
                 relevancia_activa=recuerdo.relevancia_activa,
                 vigencia=recuerdo.vigencia,
                 evento_id=recuerdo.evento_id,
+                mensaje_origen_num=recuerdo.mensaje_origen_num,
                 ultima_recuperacion=recuerdo.ultima_recuperacion,
                 embedding=recuerdo.embedding,
             )
@@ -315,6 +317,7 @@ def _dict_a_recuerdo(d: dict) -> Recuerdo:
         relevancia_activa=d.get("relevancia_activa", importancia),
         vigencia=parsear_datetime(vigencia_raw) if vigencia_raw else None,
         evento_id=d.get("evento_id"),
+        mensaje_origen_num=d.get("mensaje_origen_num"),
         ultima_recuperacion=parsear_datetime(ultima_recuperacion_raw) if ultima_recuperacion_raw else None,
         embedding=d.get("embedding"),
     )

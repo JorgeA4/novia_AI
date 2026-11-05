@@ -15,6 +15,7 @@ Uso:
 from __future__ import annotations
 
 import math
+import re
 
 
 class ServicioEmbedding:
@@ -34,6 +35,13 @@ class ServicioEmbedding:
         self._cargar()
         return self._modelo.encode(texto).tolist()
 
+    def codificar_multiples(self, textos: list[str]) -> list[list[float]]:
+        """Codifica varios textos en una sola llamada al modelo."""
+        if not textos:
+            return []
+        self._cargar()
+        return self._modelo.encode(textos).tolist()
+
     def similitud_coseno(self, a: list[float], b: list[float]) -> float:
         """
         Similitud coseno entre dos vectores de la misma dimensión.
@@ -46,3 +54,9 @@ class ServicioEmbedding:
         if norma_a == 0.0 or norma_b == 0.0:
             return 0.0
         return punto / (norma_a * norma_b)
+
+
+def dividir_en_fragmentos(texto: str) -> list[str]:
+    """Divide un mensaje en oraciones conservando su puntuación."""
+    fragmentos = re.split(r"(?<=[.!?…])\s+|[\r\n]+", texto.strip())
+    return [fragmento.strip() for fragmento in fragmentos if fragmento.strip()]

@@ -38,6 +38,7 @@ from dominio.modelos import Conflicto, Evento, Mensaje, PerfilUsuario, Recuerdo,
 from dominio.recuerdos import (
     aplicar_boost_recuperacion,
     decaer_relevancia,
+    filtrar_representados_en_historial,
     filtrar_vigentes,
     inicializar_relevancia,
     seleccionar_recuerdos_relevantes,
@@ -48,12 +49,58 @@ from dominio.relacion import (
     aplicar_deltas_turno,
     buscar_transicion_elegible,
     calcular_delta_disposicion,
+    calcular_interes_actual,
     decaer_familiaridad,
     decaer_tension,
     recalcular_familiaridad,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
 from repositorios.json.factoria import Repositorios
+
+
+# ---------------------------------------------------------------------------
+# Diagnóstico de contexto (snapshot pre-LLM para modo tester)
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass as _dataclass
+
+@_dataclass
+class DiagnosticoContexto:
+    """
+    Snapshot de los datos variables que el LLM recibió en un turno concreto.
+    Solo contiene lo que cambia por mensaje (no el perfil del personaje ni el historial).
+    """
+    # Estado emocional que el LLM vio (post-decaimiento, pre-respuesta)
+    emocion_id: str
+    emocion_intensidad: float
+    estado_animo_id: str
+    estado_animo_intensidad: float
+    sentimiento_id: str
+    sentimiento_intensidad: float
+
+    # Recuerdos inyectados (los que pasaron el filtro semántico)
+    recuerdos_inyectados: list[str]   # contenido de cada recuerdo
+    relevancia_recuerdos: list[float] # relevancia_activa de cada uno
+
+    # Conflictos activos en el momento del turno
+    conflictos_activos: list[str]     # "<#num · estado> causa"
+
+    # Lo que el LLM devolvió (deltas crudos, antes de clamp y persistencia)
+    delta_afecto: float
+    delta_confianza: float
+    delta_tension: float
+
+    # Métricas de relación PRE-turno (para comparar con las post-turno del panel de estado)
+    confianza_pre: float
+    afecto_pre: float
+    tension_pre: float
+    familiaridad_pre: float
+
+    # Interés de contacto calculado (disposición + ánimo + tiempo sin hablar)
+    interes_actual: float
+
+    # Número de turno (para referencia)
+    num_turno: int
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +168,7 @@ class ResultadoTurno(NamedTuple):
     etapa_anterior: str | None
     etapa_nueva: str | None
     deltas_turno: DeltasRelacion
+    diagnostico: DiagnosticoContexto | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +205,7 @@ class GestorTurno:
         mensajes_previos = repos.mensaje.listar_por_relacion(relacion_id)
 
         # --- 3. Guardar mensaje del usuario ---
-        repos.mensaje.guardar(Mensaje(
+        mensaje_usuario = repos.mensaje.guardar(Mensaje(
             num=0,
             relacion_id=relacion_id,
             rol="usuario",
@@ -179,6 +227,11 @@ class GestorTurno:
         temperamentos = {t.codigo: t for t in repos.catalogos.obtener_temperamentos()}
 
         recuerdos_todos = filtrar_vigentes(repos.recuerdo.listar_por_relacion(relacion_id))
+        mensajes_contexto = mensajes_previos[-cfg.contexto_llm.limite_historial:]
+        recuerdos_todos = filtrar_representados_en_historial(
+            recuerdos_todos,
+            mensajes_contexto,
+        )
         # Aplicar decaimiento de relevancia_activa antes de seleccionar
         recuerdos_todos = [decaer_relevancia(r, ahora) for r in recuerdos_todos]
         recuerdos = seleccionar_recuerdos_relevantes(
@@ -199,6 +252,9 @@ class GestorTurno:
             if personaje.temperamento_secundario_id is not None
             else None
         )
+        catalogo_emociones_idx = {e.codigo: e for e in catalogo_emociones}
+        interes = calcular_interes_actual(relacion, estado, catalogo_emociones_idx, ahora)
+
         sistema = construir_sistema(
             personaje=personaje,
             relacion=relacion,
@@ -214,9 +270,17 @@ class GestorTurno:
             instrucciones_llm=relacion.instrucciones_llm,
             temperamento_secundario=temp_secundario,
             conflictos_activos=conflictos_activos,
+            interes_actual=interes,
         )
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
+
+        # --- Snapshot pre-LLM para diagnóstico (se completa con deltas post-LLM abajo) ---
+        _num_turno = repos.mensaje.contar_por_relacion(relacion_id)
+        _confianza_pre = relacion.confianza
+        _afecto_pre = relacion.afecto
+        _tension_pre = relacion.tension
+        _familiaridad_pre = relacion.familiaridad
 
         # --- 6. Llamar al LLM (única llamada del turno) ---
         texto_llm = self._llm.completar(payload)
@@ -344,6 +408,7 @@ class GestorTurno:
                     emocion_asociada_id=emocion_id,
                     emocion_asociada_intensidad=emocion_int,
                     vigencia=vigencia,
+                    mensaje_origen_num=mensaje_usuario.num,
                     embedding=embedding_recuerdo,
                 )
                 nuevo_recuerdo = replace(
@@ -457,12 +522,37 @@ class GestorTurno:
                     )
                     repos.estado.guardar(estado)
 
+        diagnostico = DiagnosticoContexto(
+            emocion_id=estado.emocion_id,
+            emocion_intensidad=estado.emocion_intensidad,
+            estado_animo_id=estado.estado_animo_id,
+            estado_animo_intensidad=estado.estado_animo_intensidad,
+            sentimiento_id=estado.sentimiento_id,
+            sentimiento_intensidad=estado.sentimiento_intensidad,
+            recuerdos_inyectados=[r.contenido for r in recuerdos],
+            relevancia_recuerdos=[r.relevancia_activa for r in recuerdos],
+            conflictos_activos=[
+                f"#{c.num} · {c.estado.upper()}  {c.causa}"
+                for c in conflictos_activos
+            ],
+            delta_afecto=deltas.afecto,
+            delta_confianza=deltas.confianza,
+            delta_tension=deltas.tension,
+            confianza_pre=_confianza_pre,
+            afecto_pre=_afecto_pre,
+            tension_pre=_tension_pre,
+            familiaridad_pre=_familiaridad_pre,
+            interes_actual=interes,
+            num_turno=_num_turno,
+        )
+
         return ResultadoTurno(
             respuesta=respuesta,
             transicion_aplicada=transicion_aplicada,
             etapa_anterior=etapa_anterior,
             etapa_nueva=etapa_nueva,
             deltas_turno=deltas,
+            diagnostico=diagnostico,
         )
 
 

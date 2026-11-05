@@ -47,6 +47,7 @@ def construir_sistema(
     instrucciones_llm: str | None = None,
     temperamento_secundario: Temperamento | None = None,
     conflictos_activos: list[Conflicto] | None = None,
+    interes_actual: float | None = None,
 ) -> str:
     """
     Construye el mensaje de sistema que define al personaje para el LLM.
@@ -89,17 +90,19 @@ def construir_sistema(
     # Línea de tendencias: solo incluye las métricas con _delta significativo (≥ 0.01)
     tendencias: list[str] = []
     for nombre_campo, valor_delta in (
-        ("confianza",           relacion.confianza_delta),
-        ("afecto",              relacion.afecto_delta),
-        ("interes_por_hablar",  relacion.disposicion_delta),
+        ("confianza", relacion.confianza_delta),
+        ("afecto",    relacion.afecto_delta),
     ):
         if abs(valor_delta) >= 0.01:
             tendencias.append(f"{nombre_campo}={valor_delta:+.2f}")
 
+    # interes_ahora sintetiza disposición base + valencia del ánimo + tiempo sin hablar.
+    # Se usa el valor calculado si se pasa; si no, se cae a disposicion como aproximación.
+    valor_interes = interes_actual if interes_actual is not None else relacion.disposicion
     linea_metricas = (
         f"métricas  confianza={relacion.confianza:.2f}  afecto={relacion.afecto:.2f}"
         f"  familiaridad={relacion.familiaridad:.2f}  tension={relacion.tension:.2f}"
-        f"  interes_por_hablar={relacion.disposicion:.2f}"
+        f"  interes_ahora={valor_interes:.2f}"
     )
     linea_tendencias = (
         ("tendencia " + "  ".join(tendencias)) if tendencias else ""

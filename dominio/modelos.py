@@ -201,6 +201,9 @@ class Recuerdo:
     que el recuerdo es seleccionado en una conversación. Su techo natural es `importancia`.
 
     `ultima_recuperacion` registra cuándo fue usado por última vez para calcular el decaimiento.
+
+    `mensaje_origen_num` identifica el mensaje que originó el recuerdo. Es None para
+    recuerdos antiguos o creados fuera de una conversación concreta.
     """
     num: int
     relacion_id: int
@@ -216,6 +219,7 @@ class Recuerdo:
     relevancia_activa: float = 0.0                  # [0.0, 1.0] — decae y se recupera; techo = importancia
     vigencia: Optional[datetime] = None             # None = permanente; fecha = caduca
     evento_id: Optional[int] = None                 # FK -> Evento.num
+    mensaje_origen_num: Optional[int] = None        # FK -> Mensaje.num
     ultima_recuperacion: Optional[datetime] = None  # cuándo fue usado por última vez
     embedding: Optional[list[float]] = None         # NULL en MVP — fase 2
 
