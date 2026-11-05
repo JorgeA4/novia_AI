@@ -32,8 +32,10 @@ from aplicacion.gestor_contexto import (
     construir_sistema,
 )
 from dominio.configuracion import cfg
+from dominio.embedding import ServicioEmbedding
 from dominio.emociones import aplicar_presion_emocion_sobre_animo, decaer_estado
-from dominio.modelos import Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion, calcular_vigencia
+from dominio.modelos import Conflicto, Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion, calcular_vigencia
+from dominio.recuerdos import seleccionar_recuerdos_relevantes
 from dominio.relacion import (
     CondicionTransicion,
     DeltasRelacion,
@@ -41,6 +43,7 @@ from dominio.relacion import (
     buscar_transicion_elegible,
     calcular_delta_disposicion,
     decaer_familiaridad,
+    decaer_tension,
     recalcular_familiaridad,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
@@ -119,9 +122,15 @@ class ResultadoTurno(NamedTuple):
 # ---------------------------------------------------------------------------
 
 class GestorTurno:
-    def __init__(self, repos: Repositorios, cliente_llm: ClienteLLM) -> None:
+    def __init__(
+        self,
+        repos: Repositorios,
+        cliente_llm: ClienteLLM,
+        servicio_embedding: ServicioEmbedding,
+    ) -> None:
         self._repos = repos
         self._llm = cliente_llm
+        self._embedding = servicio_embedding
 
     def procesar(self, relacion_id: int, texto_usuario: str) -> ResultadoTurno:
         """
@@ -150,11 +159,12 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 4. Decaimiento emocional + familiar (incluye deriva del sentimiento — Brecha 3) ---
+        # --- 4. Decaimiento emocional + familiar + tensión (incluye deriva del sentimiento — Brecha 3) ---
         segundos = (ahora - estado.ultima_interaccion).total_seconds()
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
             relacion = decaer_familiaridad(relacion, segundos)
+            relacion = decaer_tension(relacion, segundos)
 
         # --- 5. Construir contexto ---
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
@@ -162,8 +172,16 @@ class GestorTurno:
         eneagramas = {e.codigo: e for e in repos.catalogos.obtener_eneagramas()}
         temperamentos = {t.codigo: t for t in repos.catalogos.obtener_temperamentos()}
 
-        recuerdos = repos.recuerdo.listar_por_relacion(relacion_id)
+        recuerdos_todos = repos.recuerdo.listar_por_relacion(relacion_id)
+        recuerdos = seleccionar_recuerdos_relevantes(
+            mensaje=texto_usuario,
+            recuerdos=recuerdos_todos,
+            servicio=self._embedding,
+            k=cfg.embedding.top_k_semantico,
+            peso_semantico=cfg.embedding.peso_semantico,
+        )
         perfil = repos.perfil_usuario.listar_por_relacion(relacion_id)
+        conflictos_activos = repos.conflicto.listar_activos(relacion_id)
 
         temp_secundario = (
             temperamentos[personaje.temperamento_secundario_id]
@@ -184,6 +202,7 @@ class GestorTurno:
             nombre_usuario=usuario.nombre,
             instrucciones_llm=relacion.instrucciones_llm,
             temperamento_secundario=temp_secundario,
+            conflictos_activos=conflictos_activos,
         )
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
@@ -280,14 +299,14 @@ class GestorTurno:
         repos.relacion.guardar(relacion)
 
         # --- 9b. Persistir recuerdos extraídos ---
-        # `recuerdos` ya está cargado arriba (paso 5); se usa para deduplicar.
+        # `recuerdos_todos` se usa para deduplicar contra todos los recuerdos existentes.
         # Se actualiza en cada iteración para que dos recuerdos del mismo turno
         # tampoco se dupliquen entre sí.
         categorias_validas = {"hecho_puntual", "rasgo", "hito", "estado_temporal"}
         for r in turno.get("recuerdos", []):
             try:
                 contenido = str(r["contenido"])
-                if _es_duplicado(contenido, recuerdos):
+                if _es_duplicado(contenido, recuerdos_todos):
                     continue  # ya existe uno semánticamente equivalente — descartar
 
                 importancia = max(0.0, min(1.0, float(r.get("importancia", 0.6))))
@@ -298,6 +317,8 @@ class GestorTurno:
                 emocion_int = max(0.0, min(1.0, float(r.get("emocion_asociada_intensidad", 0.0))))
 
                 vigencia = calcular_vigencia(categoria, importancia, emocion_int, ahora)
+
+                embedding_recuerdo = self._embedding.codificar(contenido)
 
                 nuevo_recuerdo = Recuerdo(
                     num=0,
@@ -312,10 +333,10 @@ class GestorTurno:
                     emocion_asociada_id=emocion_id,
                     emocion_asociada_intensidad=emocion_int,
                     vigencia=vigencia,
-                    embedding=None,
+                    embedding=embedding_recuerdo,
                 )
                 repos.recuerdo.guardar(nuevo_recuerdo)
-                recuerdos.append(nuevo_recuerdo)  # actualizar lista local para deduplicar el siguiente
+                recuerdos_todos.append(nuevo_recuerdo)  # actualizar lista local para deduplicar el siguiente
             except (KeyError, TypeError, ValueError):
                 pass  # recuerdo malformado — ignorar silenciosamente
 
@@ -356,7 +377,10 @@ class GestorTurno:
             except (KeyError, TypeError, ValueError):
                 pass  # dato malformado — ignorar silenciosamente
 
-        # --- 9d. Recalcular familiaridad desde perfil, recuerdos y mensajes ---
+        # --- 9d. Crear / escalar / resolver conflictos ---
+        _gestionar_conflictos(repos, relacion_id, deltas.tension, conflictos_activos, turno, ahora)
+
+        # --- 9e. Recalcular familiaridad desde perfil, recuerdos y mensajes ---
         # Se hace aquí, después de haber persistido nuevas entradas de perfil y recuerdos,
         # para que el cálculo incluya lo aprendido en este turno.
         perfil_actualizado = repos.perfil_usuario.listar_por_relacion(relacion_id)
@@ -425,6 +449,151 @@ class GestorTurno:
             etapa_nueva=etapa_nueva,
             deltas_turno=deltas,
         )
+
+
+# ---------------------------------------------------------------------------
+# Gestión de conflictos — crear, escalar y resolver
+# ---------------------------------------------------------------------------
+
+def _gestionar_conflictos(
+    repos: "Repositorios",
+    relacion_id: int,
+    tension_delta: float,
+    conflictos_activos: "list[Conflicto]",
+    turno: dict,
+    ahora: "datetime",
+) -> None:
+    """
+    Aplica la lógica híbrida de conflictos en un turno:
+
+    1. Si el LLM señala un conflicto nuevo (``conflicto_nuevo``), se crea.
+    2. Si la tensión supera el umbral de escalado Y ya hay un conflicto activo,
+       ese conflicto pasa a "escalado".
+    3. Si la tensión supera el umbral de creación Y no hay conflictos activos,
+       pero el LLM NO señaló uno (caso de seguridad), se crea uno genérico.
+    4. Si el LLM señala resolución (``conflicto_resuelto``), se valida el num
+       y se cierra el conflicto.
+
+    Los errores de formato del LLM se ignoran silenciosamente.
+    """
+    from repositorios.json.factoria import Repositorios as _Repos  # solo para tipado
+
+    nums_activos = {c.num for c in conflictos_activos}
+
+    # --- Paso 1: crear conflicto nuevo (LLM) — o escalar si la causa ya existe ---
+    datos_nuevo = turno.get("conflicto_nuevo")
+    conflicto_creado_por_llm = False
+
+    if isinstance(datos_nuevo, dict):
+        causa = str(datos_nuevo.get("causa", "")).strip()
+        gravedad_raw = str(datos_nuevo.get("gravedad", "activo")).strip()
+        gravedad = gravedad_raw if gravedad_raw in ("activo", "escalado") else "activo"
+        if causa:
+            # Verificar si la causa es semánticamente similar a un conflicto activo existente.
+            # Si es así, escalarlo en lugar de duplicarlo.
+            existente_similar = next(
+                (c for c in conflictos_activos if _similitud_jaccard(causa, c.causa) >= _UMBRAL_DUPLICADO),
+                None,
+            )
+            if existente_similar is not None:
+                # La causa ya existe — escalar si no está escalado ya
+                if existente_similar.estado != "escalado":
+                    repos.conflicto.actualizar_estado(existente_similar.num, "escalado")
+                conflicto_creado_por_llm = True  # evitar que el paso 2/3 actúe de nuevo
+            else:
+                # Causa genuinamente nueva — crear conflicto y su evento
+                evento = Evento(
+                    num=0,
+                    relacion_id=relacion_id,
+                    tipo="conflicto",
+                    descripcion=causa,
+                    fecha=ahora,
+                    impacto=-tension_delta,
+                    resuelto=False,
+                )
+                repos.evento.guardar(evento)
+                # Obtener el num asignado buscando el último evento de tipo conflicto
+                eventos = repos.evento.listar_por_relacion(relacion_id)
+                evento_guardado = next(
+                    (e for e in reversed(eventos) if e.tipo == "conflicto" and e.descripcion == causa),
+                    None,
+                )
+                if evento_guardado is not None:
+                    repos.conflicto.guardar(Conflicto(
+                        num=0,
+                        evento_id=evento_guardado.num,
+                        causa=causa,
+                        estado=gravedad,
+                        resolucion=None,
+                    ))
+                    conflicto_creado_por_llm = True
+
+    # --- Paso 2: escalar conflicto activo si la tensión lo justifica ---
+    if (
+        not conflicto_creado_por_llm
+        and tension_delta >= cfg.conflictos.umbral_tension_escalar
+        and conflictos_activos
+    ):
+        # Escalar el conflicto activo más reciente (último en la lista)
+        objetivo = next(
+            (c for c in reversed(conflictos_activos) if c.estado == "activo"),
+            conflictos_activos[-1],  # si todos están escalados, escalar el último
+        )
+        if objetivo.estado != "escalado":
+            repos.conflicto.actualizar_estado(objetivo.num, "escalado")
+
+    # --- Paso 3: crear conflicto automático si la tensión lo indica pero el LLM no lo hizo ---
+    if (
+        not conflicto_creado_por_llm
+        and tension_delta >= cfg.conflictos.umbral_tension_crear
+        and not conflictos_activos
+    ):
+        causa_auto = "Tensión acumulada sin causa explícita"
+        evento = Evento(
+            num=0,
+            relacion_id=relacion_id,
+            tipo="conflicto",
+            descripcion=causa_auto,
+            fecha=ahora,
+            impacto=-tension_delta,
+            resuelto=False,
+        )
+        repos.evento.guardar(evento)
+        eventos = repos.evento.listar_por_relacion(relacion_id)
+        evento_guardado = next(
+            (e for e in reversed(eventos) if e.tipo == "conflicto" and e.descripcion == causa_auto),
+            None,
+        )
+        if evento_guardado is not None:
+            repos.conflicto.guardar(Conflicto(
+                num=0,
+                evento_id=evento_guardado.num,
+                causa=causa_auto,
+                estado="activo",
+                resolucion=None,
+            ))
+
+    # --- Paso 4: resolver conflicto si el LLM lo indica ---
+    datos_resuelto = turno.get("conflicto_resuelto")
+    if isinstance(datos_resuelto, dict):
+        try:
+            num_conflicto = int(datos_resuelto["num"])
+            resolucion = str(datos_resuelto.get("resolucion", "")).strip() or None
+            # Validar silenciosamente: el num debe corresponder a un conflicto activo de esta relación
+            if num_conflicto in nums_activos:
+                repos.conflicto.actualizar_estado(num_conflicto, "resuelto", resolucion)
+                # Marcar el evento asociado como resuelto
+                conflicto_a_cerrar = next(c for c in conflictos_activos if c.num == num_conflicto)
+                eventos = repos.evento.listar_por_relacion(relacion_id)
+                evento_asociado = next(
+                    (e for e in eventos if e.num == conflicto_a_cerrar.evento_id),
+                    None,
+                )
+                if evento_asociado is not None:
+                    from dataclasses import replace as _replace
+                    repos.evento.guardar(_replace(evento_asociado, resuelto=True))
+        except (KeyError, TypeError, ValueError):
+            pass  # formato inválido del LLM — ignorar silenciosamente
 
 
 # ---------------------------------------------------------------------------

@@ -4,3 +4,4 @@ __pycache__/
 *.pyo
 .env
 .bob
+documentacion/chat_mitsuki.txt

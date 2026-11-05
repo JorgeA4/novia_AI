@@ -349,19 +349,28 @@ def aplicar_deltas_turno(
     cap: Optional[float] = None,
 ) -> Relacion:
     """
-    Devuelve una nueva Relacion aplicando variaciones independientes por dimensión,
-    con cap y resistencia en extremos.
+    Devuelve una nueva Relacion aplicando variaciones independientes por dimensión.
 
-    `cap` es cap_cotidiano (de configuracion.json) por defecto — los turnos de
-    conversación ordinarios son eventos cotidianos. Pasar cap_significativo para
-    conversaciones largas o especialmente relevantes.
+    afecto, confianza, familiaridad y disposicion usan cap y resistencia en extremos
+    (métricas que evolucionan despacio a lo largo de semanas).
+
+    tension NO usa cap ni resistencia: es una métrica reactiva que puede cambiar
+    rápidamente en un solo turno (igual que en la vida real). Se aplica el delta
+    del LLM directamente, más una reducción proporcional al afecto positivo del turno:
+        reduccion = cambio_afecto_real × tension_reduccion_por_afecto
     """
     if cap is None:
         cap = cfg.relacion.cap_cotidiano
     nuevo_afecto,       cambio_afecto       = _aplicar_cambio(relacion.afecto,       deltas.afecto,       cap)
     nuevo_confianza,    cambio_confianza    = _aplicar_cambio(relacion.confianza,     deltas.confianza,    cap)
     nuevo_familiaridad, _                  = _aplicar_cambio(relacion.familiaridad,  deltas.familiaridad, cap)
-    nuevo_tension,      _                  = _aplicar_cambio(relacion.tension,       deltas.tension,      cap)
+
+    # La tensión no usa cap ni resistencia: es una métrica reactiva que puede
+    # cambiar rápidamente (a diferencia de afecto/confianza que evolucionan despacio).
+    # Reducción proporcional al afecto positivo del turno (ya pasó por cap y resistencia).
+    reduccion_por_afecto = -max(0.0, cambio_afecto) * cfg.relacion.tension_reduccion_por_afecto
+    nuevo_tension = _recortar(relacion.tension + deltas.tension + reduccion_por_afecto)
+
     nuevo_disposicion,  cambio_disposicion = _aplicar_cambio(relacion.disposicion,   deltas.disposicion,  cap)
 
     return replace(
@@ -480,6 +489,24 @@ def recalcular_familiaridad(
     nueva_familiaridad = max(relacion.familiaridad, familiaridad_base)
 
     return replace(relacion, familiaridad=nueva_familiaridad)
+
+
+def decaer_tension(
+    relacion: Relacion,
+    segundos_transcurridos: float,
+) -> Relacion:
+    """
+    Aplica decaimiento exponencial a `tension` según el tiempo sin interacción.
+
+    La semivida configurada es de 12 horas por defecto — la tensión se disuelve
+    con el tiempo si no hay nuevas fricciones. No decae por debajo de 0.0.
+    """
+    import math as _math
+
+    semivida_segundos = cfg.relacion.tension_semivida_horas * 3600.0
+    tasa = _math.log(2) / semivida_segundos
+    nueva = relacion.tension * _math.exp(-tasa * segundos_transcurridos)
+    return replace(relacion, tension=_recortar(nueva))
 
 
 def decaer_familiaridad(

@@ -11,8 +11,10 @@ Estructura del contexto que se construye:
 
 from __future__ import annotations
 
+from dominio.configuracion import cfg
 from dominio.emociones import calcular_emocion_actual
 from dominio.modelos import (
+    Conflicto,
     Emocion,
     Eneagrama,
     EtapaRelacion,
@@ -26,18 +28,6 @@ from dominio.modelos import (
     Temperamento,
 )
 from dominio.confianza import confianza_final_de
-
-# Número máximo de mensajes del historial que se envían al LLM
-LIMITE_HISTORIAL: int = 20
-
-# Importancia mínima para incluir un recuerdo en el contexto
-IMPORTANCIA_MINIMA_RECUERDO: float = 0.4
-
-# Número máximo de recuerdos incluidos en el contexto
-LIMITE_RECUERDOS: int = 5
-
-# Confianza mínima para incluir un dato de PERFIL_USUARIO en el contexto
-CONFIANZA_MINIMA_PERFIL: float = 0.5
 
 
 def construir_sistema(
@@ -54,6 +44,7 @@ def construir_sistema(
     nombre_usuario: str,
     instrucciones_llm: str | None = None,
     temperamento_secundario: Temperamento | None = None,
+    conflictos_activos: list[Conflicto] | None = None,
 ) -> str:
     """
     Construye el mensaje de sistema que define al personaje para el LLM.
@@ -123,11 +114,23 @@ def construir_sistema(
         f"En este momento sientes: {emocion_actual.nombre}."
     )
 
-    # --- Recuerdos relevantes ---
+    # --- Conflictos activos (slot reservado — siempre se incluyen) ---
+    if conflictos_activos:
+        pendientes = conflictos_activos[:cfg.contexto_llm.limite_conflictos_activos]
+        lineas_conflicto = [
+            f"  - [#{c.num} · {c.estado.upper()}] {c.causa}"
+            for c in pendientes
+        ]
+        secciones.append(
+            "⚠ Conflictos pendientes con esta persona (NO están resueltos — "
+            "afectan cómo te sientes y cómo respondes):\n" + "\n".join(lineas_conflicto)
+        )
+
+    # --- Recuerdos relevantes (el límite no incluye los conflictos) ---
     recuerdos_relevantes = [
         r for r in recuerdos
-        if r.importancia >= IMPORTANCIA_MINIMA_RECUERDO
-    ][:LIMITE_RECUERDOS]
+        if r.importancia >= cfg.contexto_llm.importancia_minima_recuerdo
+    ][:cfg.contexto_llm.limite_recuerdos]
 
     if recuerdos_relevantes:
         lineas = [f"  - {r.contenido}" for r in recuerdos_relevantes]
@@ -136,7 +139,7 @@ def construir_sistema(
     # --- Perfil de personas relevantes ---
     perfil_relevante = [
         p for p in perfil_usuario
-        if confianza_final_de(p) >= CONFIANZA_MINIMA_PERFIL
+        if confianza_final_de(p) >= cfg.contexto_llm.confianza_minima_perfil
     ]
     if perfil_relevante:
         # Agrupar por sujeto
@@ -185,6 +188,8 @@ def construir_sistema(
         "  afecto              (float -1.0–1.0) — cambio en el cariño/apego emocional\n"
         "  confianza           (float -1.0–1.0) — cambio en la confianza y apertura mutua\n"
         "  tension             (float  0.0–1.0) — cambio en la tensión acumulada; SOLO positivo o 0.0\n"
+        "  conflicto_nuevo     (object | null) — si este turno abre un conflicto nuevo; null si no\n"
+        "  conflicto_resuelto  (object | null) — si un conflicto existente se cerró este turno; null si no\n"
         "  recuerdos           (array) — lista de recuerdos a guardar; vacía [] si no hay nada memorable\n"
         "  perfil              (array) — lista de datos factuales aprendidos del usuario; vacía [] si ninguno\n\n"
         "Guía para los deltas de relación:\n"
@@ -197,6 +202,14 @@ def construir_sistema(
         "    Ejemplos: alguien dice algo que molesta ligeramente → +0.07; discusión acalorada → +0.20;\n"
         "    conversación totalmente amigable → 0.0.\n"
         "La familiaridad y el interes_por_hablar los calcula el sistema — no los incluyas en tu respuesta.\n\n"
+        "Formato de conflicto_nuevo (usa cuando el intercambio genera fricción real, no simples diferencias de opinión):\n"
+        "  { \"causa\": \"descripción concisa de qué causó el conflicto\", \"gravedad\": \"activo\" | \"escalado\" }\n"
+        "  Ejemplos de cuándo usarlo: discusión acalorada, crítica muy hiriente, acusación, rechazo explícito,\n"
+        "    mentira descubierta. NO lo uses para pequeñas fricciones o momentos incómodos.\n\n"
+        "Formato de conflicto_resuelto (usa cuando un conflicto listado arriba queda genuinamente cerrado):\n"
+        "  { \"num\": <número del conflicto>, \"resolucion\": \"cómo se resolvió\" }\n"
+        "  El número debe coincidir con uno de los #num que aparecen en la sección de conflictos pendientes.\n"
+        "  Solo marca como resuelto si hubo disculpa aceptada, acuerdo real o cierre emocional claro.\n\n"
         f"Valores válidos para emocion_id: {codigos_emocion}\n"
         f"Valores válidos para estado_animo_id: {codigos_estado_animo}\n"
         f"Valores válidos para emocion_asociada_id en recuerdos: neutro, {codigos_emocion}, {codigos_estado_animo}\n\n"
@@ -238,13 +251,14 @@ def construir_sistema(
 
 def construir_historial(mensajes: list[Mensaje]) -> list[dict[str, str]]:
     """
-    Convierte los últimos LIMITE_HISTORIAL mensajes al formato {role, content}
-    que espera la API del LLM.
+    Convierte los últimos N mensajes al formato {role, content}
+    que espera la API del LLM. El límite se lee de configuracion.json
+    (contexto_llm.limite_historial).
 
         rol "usuario"   → role "user"
         rol "personaje" → role "assistant"
     """
-    ultimos = mensajes[-LIMITE_HISTORIAL:]
+    ultimos = mensajes[-cfg.contexto_llm.limite_historial:]
     mapa_rol = {"usuario": "user", "personaje": "assistant"}
     return [
         {"role": mapa_rol.get(m.rol, "user"), "content": m.contenido}

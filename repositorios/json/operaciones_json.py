@@ -209,6 +209,17 @@ class ConflictoJsonConEventos(ConflictoJson):
             if d["relacion_id"] == relacion_id
         }
 
+    def actualizar_estado(self, num: int, estado: str, resolucion: Optional[str] = None) -> None:
+        """Cambia el estado (y opcionalmente la resolución) de un conflicto existente."""
+        registros = leer_json(self._ruta)
+        for r in registros:
+            if r["num"] == num:
+                r["estado"] = estado
+                if resolucion is not None:
+                    r["resolucion"] = resolucion
+                break
+        escribir_json(self._ruta, registros)
+
     def eliminar_por_relacion(self, relacion_id: int) -> None:
         ids_eventos = self._ids_eventos_de_relacion(relacion_id)
         registros = leer_json(self._ruta)

@@ -91,6 +91,8 @@ class ConfigRelacion:
     familiaridad_escala_recuerdos: float    # nº de recuerdos que equivale a familiaridad=1.0 (antes de raíz)
     familiaridad_escala_mensajes: float     # nº de mensajes que equivale a familiaridad=1.0 (antes de raíz)
     familiaridad_semivida_dias: float       # días para que la familiaridad sin interacción baje a la mitad
+    tension_semivida_horas: float           # horas para que la tensión sin fricción baje a la mitad
+    tension_reduccion_por_afecto: float     # fracción del afecto positivo que reduce tensión en cada turno
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,28 @@ class ConfigTransicionEtapa:
 
 
 @dataclass(frozen=True)
+class ConfigConflictos:
+    umbral_tension_crear: float    # tension_delta >= este valor → crear conflicto nuevo
+    umbral_tension_escalar: float  # tension_delta >= este valor + conflicto activo → escalar
+
+
+@dataclass(frozen=True)
+class ConfigContextoLlm:
+    limite_historial: int
+    limite_recuerdos: int
+    importancia_minima_recuerdo: float
+    confianza_minima_perfil: float
+    limite_conflictos_activos: int
+
+
+@dataclass(frozen=True)
+class ConfigEmbedding:
+    modelo: str
+    top_k_semantico: int
+    peso_semantico: float
+
+
+@dataclass(frozen=True)
 class Configuracion:
     capas: ConfigCapas
     presion_turno: ConfigPresionTurno
@@ -117,6 +141,9 @@ class Configuracion:
     relacion: ConfigRelacion
     recuerdos: ConfigRecuerdos
     transicion_etapa: ConfigTransicionEtapa
+    conflictos: ConfigConflictos
+    contexto_llm: ConfigContextoLlm
+    embedding: ConfigEmbedding
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +164,9 @@ def _cargar_configuracion() -> Configuracion:
         relacion=ConfigRelacion(**d["relacion"]),
         recuerdos=ConfigRecuerdos(**d["recuerdos"]),
         transicion_etapa=ConfigTransicionEtapa(**d["transicion_etapa"]),
+        conflictos=ConfigConflictos(**d["conflictos"]),
+        contexto_llm=ConfigContextoLlm(**d["contexto_llm"]),
+        embedding=ConfigEmbedding(**d["embedding"]),
     )
 
 

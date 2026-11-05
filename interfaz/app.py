@@ -37,6 +37,8 @@ from textual.app import App, ComposeResult
 
 from aplicacion.cliente_llm import ClienteGemini, ClienteOpenAI, ClienteStub
 from aplicacion.gestor_turno import GestorTurno
+from dominio.configuracion import cfg
+from dominio.embedding import ServicioEmbedding
 from dominio.modelos import Estado, Personaje, Relacion, Usuario
 from interfaz.pantallas.menu_principal import MenuPrincipal
 from repositorios.json.factoria import Repositorios, crear_repositorios
@@ -155,7 +157,10 @@ class NoviApp(App):
         # Cliente LLM — se elige el proveedor según PROVEEDOR (o heurística por clave)
         cliente = _crear_cliente_llm()
 
-        self._gestor = GestorTurno(self._repos, cliente)
+        # Servicio de embeddings — instancia única para toda la sesión (lazy load)
+        servicio_embedding = ServicioEmbedding(cfg.embedding.modelo)
+
+        self._gestor = GestorTurno(self._repos, cliente, servicio_embedding)
 
     def on_mount(self) -> None:
         """Al montar, ajustar subtítulo con el proveedor activo."""
