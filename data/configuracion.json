@@ -52,7 +52,10 @@
   "recuerdos": {
     "vigencia_dias_hecho_puntual": 30,
     "vigencia_dias_estado_temporal": 14,
-    "umbral_permanencia": 0.85
+    "umbral_permanencia": 0.85,
+    "relevancia_boost_emocion": 0.10,
+    "relevancia_boost_recuperacion": 0.20,
+    "relevancia_semivida_dias": 14.0
   },
 
   "transicion_etapa": {
@@ -68,7 +71,6 @@
   "contexto_llm": {
     "limite_historial": 20,
     "limite_recuerdos": 5,
-    "importancia_minima_recuerdo": 0.4,
     "confianza_minima_perfil": 0.5,
     "limite_conflictos_activos": 2
   },
@@ -76,6 +78,9 @@
   "embedding": {
     "modelo": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "top_k_semantico": 5,
-    "peso_semantico": 0.6
+    "umbral_similitud_minima": 0.25,
+    "peso_importancia": 0.45,
+    "peso_relevancia": 0.35,
+    "peso_emocion_recuperacion": 0.20
   }
 }

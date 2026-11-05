@@ -11,15 +11,13 @@ Se abre encima del MenuPrincipal y se cierra con Escape o tras ejecutar la acci�
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
-from dominio.modelos import Estado, Relacion
-from dominio.valores_iniciales import RELACION_VALORES_INICIALES, ESTADO_VALORES_INICIALES
+from dominio.modelos import Relacion
 from repositorios.json.factoria import Repositorios
 
 
@@ -201,8 +199,8 @@ class PantallaOpcionesChat(ModalScreen):
 
     def _ejecutar_borrado(self) -> None:
         """
-        Elimina todos los datos de la conversación y resetea la relación
-        y el estado emocional a sus valores iniciales.
+        Elimina todos los datos de la conversación, incluyendo la relación
+        y el estado emocional. La tarjeta desaparece del menú principal.
         """
         rid = self._relacion_id
         repos = self._repos
@@ -214,14 +212,8 @@ class PantallaOpcionesChat(ModalScreen):
         repos.conflicto.eliminar_por_relacion(rid)
         repos.evento.eliminar_por_relacion(rid)
 
-        # Resetear relación a valores iniciales
-        relacion = repos.relacion.obtener(rid)
-        relacion_reseteada = replace(relacion, **RELACION_VALORES_INICIALES)
-        repos.relacion.guardar(relacion_reseteada)
-
-        # Resetear estado emocional
-        estado = repos.estado.obtener(rid)
-        estado_reseteado = replace(estado, **ESTADO_VALORES_INICIALES, ultima_interaccion=datetime.now())
-        repos.estado.guardar(estado_reseteado)
+        # Eliminar relación y estado — la tarjeta deja de existir
+        repos.estado.eliminar(rid)
+        repos.relacion.eliminar(rid)
 
         self.dismiss()

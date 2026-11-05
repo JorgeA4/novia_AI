@@ -100,6 +100,9 @@ class ConfigRecuerdos:
     vigencia_dias_hecho_puntual: int    # días de vigencia para "hecho_puntual"
     vigencia_dias_estado_temporal: int  # días de vigencia para "estado_temporal"
     umbral_permanencia: float           # importancia o emocion_intensidad >= este valor → vigencia None
+    relevancia_boost_emocion: float     # fracción de emocion_intensidad que se suma a relevancia_activa inicial
+    relevancia_boost_recuperacion: float  # boost aplicado a relevancia_activa al ser recuperado
+    relevancia_semivida_dias: float     # días para que relevancia_activa baje a la mitad sin uso
 
 
 @dataclass(frozen=True)
@@ -118,7 +121,6 @@ class ConfigConflictos:
 class ConfigContextoLlm:
     limite_historial: int
     limite_recuerdos: int
-    importancia_minima_recuerdo: float
     confianza_minima_perfil: float
     limite_conflictos_activos: int
 
@@ -127,7 +129,10 @@ class ConfigContextoLlm:
 class ConfigEmbedding:
     modelo: str
     top_k_semantico: int
-    peso_semantico: float
+    umbral_similitud_minima: float      # similitud coseno mínima para que un recuerdo sea candidato
+    peso_importancia: float             # peso de importancia en el ranking de candidatos
+    peso_relevancia: float              # peso de relevancia_activa en el ranking de candidatos
+    peso_emocion_recuperacion: float    # peso de emocion_asociada_intensidad en el ranking
 
 
 @dataclass(frozen=True)

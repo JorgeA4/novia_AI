@@ -256,8 +256,10 @@ class RecuerdoJson:
                 ultima_relevancia=recuerdo.ultima_relevancia,
                 emocion_asociada_id=recuerdo.emocion_asociada_id,
                 emocion_asociada_intensidad=recuerdo.emocion_asociada_intensidad,
+                relevancia_activa=recuerdo.relevancia_activa,
                 vigencia=recuerdo.vigencia,
                 evento_id=recuerdo.evento_id,
+                ultima_recuperacion=recuerdo.ultima_recuperacion,
                 embedding=recuerdo.embedding,
             )
         registros = [r for r in registros if r["num"] != recuerdo.num]
@@ -265,6 +267,7 @@ class RecuerdoJson:
         d["fecha_creacion"] = recuerdo.fecha_creacion.isoformat()
         d["ultima_relevancia"] = recuerdo.ultima_relevancia.isoformat()
         d["vigencia"] = recuerdo.vigencia.isoformat() if recuerdo.vigencia is not None else None
+        d["ultima_recuperacion"] = recuerdo.ultima_recuperacion.isoformat() if recuerdo.ultima_recuperacion is not None else None
         registros.append(d)
         escribir_json(self._ruta, registros)
 
@@ -293,6 +296,8 @@ class RecuerdoJson:
 
 def _dict_a_recuerdo(d: dict) -> Recuerdo:
     vigencia_raw = d.get("vigencia")
+    ultima_recuperacion_raw = d.get("ultima_recuperacion")
+    importancia = d["importancia"]
     return Recuerdo(
         num=d["num"],
         relacion_id=d["relacion_id"],
@@ -300,13 +305,17 @@ def _dict_a_recuerdo(d: dict) -> Recuerdo:
         categoria=d.get("categoria", "hecho_puntual"),
         contenido=d["contenido"],
         origen=d["origen"],
-        importancia=d["importancia"],
+        importancia=importancia,
         fecha_creacion=parsear_datetime(d["fecha_creacion"]),
         ultima_relevancia=parsear_datetime(d["ultima_relevancia"]),
         emocion_asociada_id=d.get("emocion_asociada_id") or "neutro",
         emocion_asociada_intensidad=d.get("emocion_asociada_intensidad") or 0.0,
+        # relevancia_activa: si no existe en el JSON (recuerdos antiguos), se inicializa
+        # igual a importancia para que no queden con valor 0 al migrar.
+        relevancia_activa=d.get("relevancia_activa", importancia),
         vigencia=parsear_datetime(vigencia_raw) if vigencia_raw else None,
         evento_id=d.get("evento_id"),
+        ultima_recuperacion=parsear_datetime(ultima_recuperacion_raw) if ultima_recuperacion_raw else None,
         embedding=d.get("embedding"),
     )
 

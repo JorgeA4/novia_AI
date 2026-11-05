@@ -203,7 +203,9 @@ Al avanzar de etapa, el sentimiento se actualiza: el sistema asigna el sentimien
 
 ---
 
-## RECUERDO — categoría y vigencia
+## RECUERDO — categoría, vigencia y recuperación
+
+### Categoría y vigencia
 
 El campo `categoria` clasifica cada recuerdo para aplicar lógica de vigencia y priorización:
 
@@ -229,6 +231,61 @@ Los umbrales y días se leen de `configuracion.json` (`recuerdos.*`). `vigencia 
 `emocion_asociada_id` e `emocion_asociada_intensidad` son **obligatorios**. Usar `"neutro"` / `0.0` cuando no hay carga emocional. Todos los códigos del catálogo de emociones son válidos (incluyendo `"neutro"` con `capa: "cualquiera"`).
 
 **Regla de formato del contenido:** oración completa con sujeto explícito + verbo en pasado. Si el sujeto es el propio personaje, se usa primera persona (`"Admití que..."`, `"Sentí que..."`). Si es otra persona o cosa, se nombra (`"Jorge dijo que..."`, `"El clima estaba..."`). Los fragmentos nominales o frases sin verbo no son válidos.
+
+### `relevancia_activa` — inicialización, decaimiento y boost
+
+`relevancia_activa` es una propiedad dinámica e independiente de `importancia`. Su techo natural es siempre `importancia`.
+
+| propiedad           | naturaleza  | muta | techo         | quién la asigna              |
+|---------------------|-------------|------|---------------|------------------------------|
+| `importancia`       | intrínseca  | No   | 1.0           | LLM (al crear)               |
+| `relevancia_activa` | dinámica    | Sí   | `importancia` | sistema (decaimiento / boost)|
+
+**Inicialización** (al crear el recuerdo):
+```
+relevancia_activa = min(importancia + relevancia_boost_emocion × emocion_asociada_intensidad, 1.0)
+```
+Los momentos con mayor carga emocional arrancan con más "frescura" en la memoria activa.
+
+**Decaimiento** (antes de cada selección de recuerdos):
+```
+relevancia_activa ← relevancia_activa × exp(−λ × dias_transcurridos)
+λ = ln(2) / relevancia_semivida_dias        (defecto: 14 días)
+dias_transcurridos = (ahora − ultima_recuperacion) o (ahora − fecha_creacion)
+```
+
+**Boost de recuperación** (tras ser seleccionado para el contexto del LLM):
+```
+relevancia_activa ← min(relevancia_activa + relevancia_boost_recuperacion, importancia)
+ultima_recuperacion ← ahora
+```
+Los cambios se persisten en el repositorio inmediatamente.
+
+### Pipeline de recuperación — dos fases en cascada
+
+Secuencia completa al seleccionar recuerdos para el contexto del LLM:
+
+**Pre-paso 1 — descarte por vigencia:**
+Se descartan todos los recuerdos cuya `vigencia` haya expirado (`vigencia < ahora`). Un recuerdo expirado nunca llega al ranking ni al LLM. Solo los vigentes (o permanentes) continúan.
+
+**Pre-paso 2 — decaimiento:**
+Se aplica la fórmula de decaimiento a `relevancia_activa` de cada recuerdo vigente (ver arriba).
+
+**Fase 1 — filtro semántico** *(requiere embeddings; fase 2 del proyecto)*:
+Solo pasan los recuerdos con similitud coseno `>= umbral_similitud_minima` (defecto: `0.25`).
+Los recuerdos sin `embedding` (`embedding=None`, fase 1 del proyecto) se tratan con similitud `0.0` y solo pasan si el umbral es `0.0` (degradación graceful).
+
+**Fase 2 — ranking por señales intrínsecas:**
+Los candidatos se ordenan por:
+```
+score = peso_importancia × importancia
+      + peso_relevancia  × relevancia_activa
+      + peso_emocion     × emocion_asociada_intensidad
+```
+Pesos por defecto: `0.45 / 0.35 / 0.20` (configuración `embedding.*`). Se devuelven los `k` primeros (`contexto_llm.limite_recuerdos`, defecto: `5`).
+
+**Post-paso — boost de recuperación:**
+Cada recuerdo seleccionado recibe el boost y se actualiza `ultima_recuperacion` (ver arriba).
 
 ## Deduplicación de RECUERDO
 
@@ -265,4 +322,3 @@ Campos con conjunto cerrado de valores modelados como enums en el código, sin c
 ## Pendiente de definir
 
 - Fórmulas de actualización del `sentimiento` por eventos que no sean cambio de etapa.
-- Decaimiento y reactivación de `importancia` en RECUERDO.

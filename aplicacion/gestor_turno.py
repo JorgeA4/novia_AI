@@ -35,7 +35,13 @@ from dominio.configuracion import cfg
 from dominio.embedding import ServicioEmbedding
 from dominio.emociones import aplicar_presion_emocion_sobre_animo, decaer_estado
 from dominio.modelos import Conflicto, Evento, Mensaje, PerfilUsuario, Recuerdo, Relacion, calcular_vigencia
-from dominio.recuerdos import seleccionar_recuerdos_relevantes
+from dominio.recuerdos import (
+    aplicar_boost_recuperacion,
+    decaer_relevancia,
+    filtrar_vigentes,
+    inicializar_relevancia,
+    seleccionar_recuerdos_relevantes,
+)
 from dominio.relacion import (
     CondicionTransicion,
     DeltasRelacion,
@@ -172,14 +178,19 @@ class GestorTurno:
         eneagramas = {e.codigo: e for e in repos.catalogos.obtener_eneagramas()}
         temperamentos = {t.codigo: t for t in repos.catalogos.obtener_temperamentos()}
 
-        recuerdos_todos = repos.recuerdo.listar_por_relacion(relacion_id)
+        recuerdos_todos = filtrar_vigentes(repos.recuerdo.listar_por_relacion(relacion_id))
+        # Aplicar decaimiento de relevancia_activa antes de seleccionar
+        recuerdos_todos = [decaer_relevancia(r, ahora) for r in recuerdos_todos]
         recuerdos = seleccionar_recuerdos_relevantes(
             mensaje=texto_usuario,
             recuerdos=recuerdos_todos,
             servicio=self._embedding,
             k=cfg.embedding.top_k_semantico,
-            peso_semantico=cfg.embedding.peso_semantico,
         )
+        # Boost de relevancia_activa a los recuerdos seleccionados y persistir
+        for rec in recuerdos:
+            rec_actualizado = aplicar_boost_recuperacion(rec, ahora)
+            repos.recuerdo.guardar(rec_actualizado)
         perfil = repos.perfil_usuario.listar_por_relacion(relacion_id)
         conflictos_activos = repos.conflicto.listar_activos(relacion_id)
 
@@ -335,6 +346,10 @@ class GestorTurno:
                     vigencia=vigencia,
                     embedding=embedding_recuerdo,
                 )
+                nuevo_recuerdo = replace(
+                    nuevo_recuerdo,
+                    relevancia_activa=inicializar_relevancia(nuevo_recuerdo),
+                )
                 repos.recuerdo.guardar(nuevo_recuerdo)
                 recuerdos_todos.append(nuevo_recuerdo)  # actualizar lista local para deduplicar el siguiente
             except (KeyError, TypeError, ValueError):
@@ -384,7 +399,7 @@ class GestorTurno:
         # Se hace aquí, después de haber persistido nuevas entradas de perfil y recuerdos,
         # para que el cálculo incluya lo aprendido en este turno.
         perfil_actualizado = repos.perfil_usuario.listar_por_relacion(relacion_id)
-        recuerdos_actualizados = repos.recuerdo.listar_por_relacion(relacion_id)
+        recuerdos_actualizados = filtrar_vigentes(repos.recuerdo.listar_por_relacion(relacion_id))
         n_mensajes = repos.mensaje.contar_por_relacion(relacion_id)
         relacion = recalcular_familiaridad(relacion, perfil_actualizado, recuerdos_actualizados, n_mensajes)
         repos.relacion.guardar(relacion)

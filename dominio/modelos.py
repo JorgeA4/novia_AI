@@ -195,6 +195,12 @@ class Recuerdo:
     `emocion_asociada_id` e `emocion_asociada_intensidad` son obligatorios; usar "neutro"/0.0
     cuando no hay carga emocional.
     `embedding` se deja None en el MVP; se popula en fase 2 para búsqueda semántica.
+
+    `relevancia_activa` mide qué tan "fresco" está el recuerdo en la memoria activa.
+    Se inicializa desde importancia y decae con el tiempo; se recupera (boost) cada vez
+    que el recuerdo es seleccionado en una conversación. Su techo natural es `importancia`.
+
+    `ultima_recuperacion` registra cuándo fue usado por última vez para calcular el decaimiento.
     """
     num: int
     relacion_id: int
@@ -207,8 +213,10 @@ class Recuerdo:
     ultima_relevancia: datetime
     emocion_asociada_id: str                        # FK -> Emocion.codigo; "neutro" si sin carga
     emocion_asociada_intensidad: float              # [0.0, 1.0]; 0.0 si neutro
+    relevancia_activa: float = 0.0                  # [0.0, 1.0] — decae y se recupera; techo = importancia
     vigencia: Optional[datetime] = None             # None = permanente; fecha = caduca
     evento_id: Optional[int] = None                 # FK -> Evento.num
+    ultima_recuperacion: Optional[datetime] = None  # cuándo fue usado por última vez
     embedding: Optional[list[float]] = None         # NULL en MVP — fase 2
 
 

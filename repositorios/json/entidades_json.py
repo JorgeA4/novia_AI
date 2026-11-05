@@ -109,6 +109,11 @@ class RelacionJson:
         return [_dict_a_relacion(d) for d in leer_json(self._ruta)
                 if d["usuario_id"] == usuario_id]
 
+    def eliminar(self, num: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["num"] != num]
+        escribir_json(self._ruta, registros)
+
 
 def _dict_a_relacion(d: dict) -> Relacion:
     return Relacion(
@@ -148,6 +153,11 @@ class EstadoJson:
         d = asdict(estado)
         d["ultima_interaccion"] = estado.ultima_interaccion.isoformat()
         registros.append(d)
+        escribir_json(self._ruta, registros)
+
+    def eliminar(self, relacion_id: int) -> None:
+        registros = leer_json(self._ruta)
+        registros = [r for r in registros if r["relacion_id"] != relacion_id]
         escribir_json(self._ruta, registros)
 
 

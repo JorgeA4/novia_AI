@@ -167,7 +167,9 @@ confianza_llm → FLOAT (0.0 – 1.0)
 
 Memoria narrativa del personaje sobre la relación. Los datos factuales de personas pertenecen a PERFIL_USUARIO.
 
-`importancia` decae con el tiempo si el recuerdo no se reactiva; cuando cae bajo umbral el sistema deja de recuperarlo. `vigencia` es `None` para recuerdos permanentes; cuando tiene valor marca la fecha tras la cual puede borrarse físicamente si no se reactivó — calculada por el sistema según `categoria`, nunca por el LLM. `embedding` se deja NULL en MVP y se popula en fase 2 para búsqueda semántica.
+`importancia` es una propiedad intrínseca y estable del recuerdo, asignada por el LLM al crearlo; no muta. `vigencia` es `None` para recuerdos permanentes; cuando tiene valor marca la fecha tras la cual el recuerdo se considera expirado y se descarta **antes** de cualquier proceso de recuperación — calculada por el sistema según `categoria`, nunca por el LLM. `embedding` se deja None en el MVP y se popula en fase 2 para búsqueda semántica.
+
+`relevancia_activa` es una propiedad dinámica e independiente de `importancia`: se inicializa al crear el recuerdo, decae exponencialmente con el tiempo sin uso, y recibe un boost cada vez que el recuerdo es seleccionado en una conversación. Su techo natural es siempre `importancia`.
 
 `emocion_asociada_id` e `emocion_asociada_intensidad` son **obligatorios**; usar `"neutro"` / `0.0` cuando no hay carga emocional.
 
@@ -190,12 +192,14 @@ tipo                        → STR ("episodico" | "relacional")
 categoria                   → STR ("hecho_puntual" | "rasgo" | "hito" | "estado_temporal")
 contenido                   → STR
 origen                      → STR ("sistema" | "llm")
-importancia                 → FLOAT (0.0 – 1.0)
+importancia                 → FLOAT (0.0 – 1.0)  — propiedad fija; asignada al crear, no muta
 emocion_asociada_id         → STR (FK -> EMOCION.codigo)
 emocion_asociada_intensidad → FLOAT (0.0 – 1.0)
 fecha_creacion              → DATETIME
 ultima_relevancia           → DATETIME
-vigencia                    → DATETIME (opcional — None = permanente)
+relevancia_activa           → FLOAT (0.0 – 1.0)  — decae con tiempo; boost al recuperar; techo = importancia
+vigencia                    → DATETIME (opcional — None = permanente; si expiró, se descarta)
+ultima_recuperacion         → DATETIME (opcional — None si nunca fue recuperado)
 embedding                   → VECTOR (opcional — None en MVP, fase 2)
 
 ### Lógica de `vigencia` por `categoria`
@@ -208,6 +212,8 @@ embedding                   → VECTOR (opcional — None en MVP, fase 2)
 | `estado_temporal`| fecha_creacion + `vigencia_dias_estado_temporal` (defecto: 14 d)|
 
 Excepción: si `importancia >= umbral_permanencia` (defecto: 0.85) o `emocion_asociada_intensidad >= umbral_permanencia`, el recuerdo es siempre permanente independientemente de la categoría.
+
+Ver `logica_interna.md` para el pipeline completo de recuperación (filtro de vigencia, decaimiento, ranking y boost).
 
 ------------------------------------------------------
 

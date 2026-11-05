@@ -11,6 +11,8 @@ Estructura del contexto que se construye:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from dominio.configuracion import cfg
 from dominio.emociones import calcular_emocion_actual
 from dominio.modelos import (
@@ -127,13 +129,20 @@ def construir_sistema(
         )
 
     # --- Recuerdos relevantes (el límite no incluye los conflictos) ---
-    recuerdos_relevantes = [
-        r for r in recuerdos
-        if r.importancia >= cfg.contexto_llm.importancia_minima_recuerdo
-    ][:cfg.contexto_llm.limite_recuerdos]
+    # Los recuerdos ya vienen filtrados y ordenados por relevancia desde
+    # seleccionar_recuerdos_relevantes; aquí solo se reordenan cronológicamente
+    # para preservar el orden narrativo al pasarlos al LLM.
+    recuerdos_relevantes = sorted(
+        recuerdos[:cfg.contexto_llm.limite_recuerdos],
+        key=lambda r: r.fecha_creacion,
+    )
 
     if recuerdos_relevantes:
-        lineas = [f"  - {r.contenido}" for r in recuerdos_relevantes]
+        ahora_ts = datetime.now(timezone.utc)
+        lineas = [
+            f"  - [{_etiqueta_temporal(r.fecha_creacion, ahora_ts)}] {r.contenido}"
+            for r in recuerdos_relevantes
+        ]
         secciones.append("Recuerdas sobre esta relación:\n" + "\n".join(lineas))
 
     # --- Perfil de personas relevantes ---
@@ -247,6 +256,43 @@ def construir_sistema(
     )
 
     return "\n\n".join(secciones)
+
+
+def _etiqueta_temporal(fecha: datetime, ahora: datetime) -> str:
+    """
+    Convierte una fecha de creación en una expresión vaga de antigüedad,
+    tal como la usaría un ser humano al recordar algo.
+
+    Franjas:
+        0 días         → "hoy"
+        1 día          → "ayer"
+        2 días         → "antier"
+        3–13 días      → "hace días"
+        14–60 días     → "hace semanas"
+        61–365 días    → "hace meses"
+        366–730 días   → "hace más de un año"
+        > 730 días     → "hace años"
+    """
+    # Normalizar ambas fechas a UTC con zona horaria para poder restar
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    dias = (ahora - fecha).days
+
+    if dias == 0:
+        return "hoy"
+    if dias == 1:
+        return "ayer"
+    if dias == 2:
+        return "antier"
+    if dias <= 13:
+        return "hace días"
+    if dias <= 60:
+        return "hace semanas"
+    if dias <= 365:
+        return "hace meses"
+    if dias <= 730:
+        return "hace más de un año"
+    return "hace años"
 
 
 def construir_historial(mensajes: list[Mensaje]) -> list[dict[str, str]]:
