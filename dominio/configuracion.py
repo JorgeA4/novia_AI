@@ -17,6 +17,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +107,17 @@ class ConfigRecuerdos:
 
 
 @dataclass(frozen=True)
+class ConfigTransicionCondicion:
+    """Umbral mínimo de una transición de etapa. Refleja dominio.relacion.CondicionTransicion."""
+    desde_id: str
+    hasta_id: str
+    confianza_min: Optional[float] = None
+    afecto_min: Optional[float] = None
+    familiaridad_min: Optional[float] = None
+    tension_max: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class ConfigTransicionEtapa:
     impacto_evento: float
     delta_sentimiento_al_avanzar: float
@@ -146,6 +158,7 @@ class Configuracion:
     relacion: ConfigRelacion
     recuerdos: ConfigRecuerdos
     transicion_etapa: ConfigTransicionEtapa
+    transiciones_condiciones: tuple[ConfigTransicionCondicion, ...]
     conflictos: ConfigConflictos
     contexto_llm: ConfigContextoLlm
     embedding: ConfigEmbedding
@@ -169,6 +182,9 @@ def _cargar_configuracion() -> Configuracion:
         relacion=ConfigRelacion(**d["relacion"]),
         recuerdos=ConfigRecuerdos(**d["recuerdos"]),
         transicion_etapa=ConfigTransicionEtapa(**d["transicion_etapa"]),
+        transiciones_condiciones=tuple(
+            ConfigTransicionCondicion(**c) for c in d["transiciones_condiciones"]
+        ),
         conflictos=ConfigConflictos(**d["conflictos"]),
         contexto_llm=ConfigContextoLlm(**d["contexto_llm"]),
         embedding=ConfigEmbedding(**d["embedding"]),

@@ -14,6 +14,7 @@ El script es idempotente: omite recuerdos que ya tienen embedding.
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 # Permitir importaciones desde la raíz del proyecto
@@ -35,6 +36,8 @@ def recalcular(relacion_id: int | None = None) -> None:
     else:
         ids_relacion = [r.num for r in repos.relacion.listar_todas()]
 
+    total_actualizados = 0
+
     for rid in ids_relacion:
         recuerdos = repos.recuerdo.listar_por_relacion(rid)
         sin_embedding = [r for r in recuerdos if r.embedding is None]
@@ -45,13 +48,17 @@ def recalcular(relacion_id: int | None = None) -> None:
 
         print(f"Relación {rid}: procesando {len(sin_embedding)} recuerdos sin embedding...")
 
-        for recuerdo in sin_embedding:
-            from dataclasses import replace
-            embedding = servicio.codificar(recuerdo.contenido)
+        embeddings = servicio.codificar_multiples(
+            [recuerdo.contenido for recuerdo in sin_embedding]
+        )
+        for recuerdo, embedding in zip(sin_embedding, embeddings):
             recuerdo_actualizado = replace(recuerdo, embedding=embedding)
             repos.recuerdo.guardar(recuerdo_actualizado)
 
+        total_actualizados += len(sin_embedding)
         print(f"Relación {rid}: ✓ {len(sin_embedding)} recuerdos actualizados.")
+
+    print(f"Total actualizado: {total_actualizados} recuerdos.")
 
 
 if __name__ == "__main__":

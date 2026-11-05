@@ -18,8 +18,7 @@ from textual.widgets import Button, Label
 from aplicacion.gestor_turno import GestorTurno
 from dominio.modelos import Personaje
 from dominio.valores_iniciales import nueva_relacion, nuevo_estado
-from repositorios.json._utilidades import siguiente_id, leer_json
-from repositorios.json.factoria import Repositorios
+from repositorios.interfaces import Repositorios
 
 
 class PantallaSeleccionPersonaje(ModalScreen):
@@ -141,8 +140,12 @@ class PantallaSeleccionPersonaje(ModalScreen):
                 return
 
         # No existe — crear relación y estado iniciales
-        todas_relaciones = leer_json(repos.relacion._ruta)
-        nuevo_num = siguiente_id(todas_relaciones)
+        # El siguiente ID se calcula a partir de los registros ya existentes,
+        # sin acceder a internos del repositorio.
+        todos_nums = [r.num for r in repos.relacion.listar_por_usuario(usuario_id=1)]
+        # Incluir también relaciones de otros usuarios para evitar colisiones de num
+        todos_nums += [r.num for r in repos.relacion.listar_por_personaje(personaje_id)]
+        nuevo_num = max(todos_nums, default=0) + 1
 
         repos.relacion.guardar(nueva_relacion(nuevo_num, personaje_id, usuario_id=1))
         repos.estado.guardar(nuevo_estado(nuevo_num))

@@ -30,7 +30,7 @@ from textual.widgets import Button, Footer, Header, Label, Static
 
 from aplicacion.gestor_turno import GestorTurno
 from dominio.modelos import Personaje, Relacion
-from repositorios.json.factoria import Repositorios
+from repositorios.interfaces import Repositorios
 
 
 class TarjetaChat(Static):

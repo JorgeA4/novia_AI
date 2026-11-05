@@ -203,7 +203,7 @@ relevancia_activa           → FLOAT (0.0 – 1.0)  — decae con tiempo; boost
 vigencia                    → DATETIME (opcional — None = permanente; si expiró, se descarta)
 mensaje_origen_num          → INT (FK -> MENSAJE.num, opcional)
 ultima_recuperacion         → DATETIME (opcional — None si nunca fue recuperado)
-embedding                   → VECTOR (opcional — None en MVP, fase 2)
+embedding                   → VECTOR(384) (opcional — None en MVP; fase 2: pgvector, índice HNSW)
 
 ### Lógica de `vigencia` por `categoria`
 
@@ -311,3 +311,39 @@ actualiza las métricas de RELACION (ver logica_interna.md §Velocidad de cambio
 | cotidiano       | ±0.03         | mensaje breve, conversación normal         |
 | significativo   | ±0.10         | conversación larga, discusión real         |
 | extraordinario  | sin límite    | confesión, promesa importante, traición    |
+
+------------------------------------------------------
+
+## Decisiones de persistencia
+
+### Fase 1 — JSON en disco
+
+Implementación actual. Todos los campos se serializan como JSON plano en `data/`.
+El campo `embedding` se almacena como lista de floats en texto. Es ineficiente pero
+funcional para el MVP con pocos recuerdos.
+
+### Fase 2 — PostgreSQL + pgvector
+
+**Decisión registrada:** la migración a base de datos usará **PostgreSQL** con la
+extensión **pgvector**.
+
+Detalles del campo `RECUERDO.embedding`:
+
+- Tipo de columna: `vector(384)` (384 dimensiones — modelo `paraphrase-multilingual-MiniLM-L12-v2`)
+- Índice: **HNSW** (`CREATE INDEX ON recuerdo USING hnsw (embedding vector_cosine_ops)`)
+- Operador de búsqueda: `<=>` (distancia coseno)
+- Tamaño en disco: 384 × 4 bytes = **1.536 bytes por fila** (frente a ~3–5 KB en JSON)
+
+Ejemplo de consulta de recuperación por similitud:
+
+```sql
+SELECT * FROM recuerdo
+WHERE relacion_id = $1
+ORDER BY embedding <=> $2::vector
+LIMIT 5;
+```
+
+La capa de dominio (`dominio/`) no cambia. Solo se sustituye el repositorio JSON
+(`repositorios/json/operaciones_json.py`) por su equivalente Postgres
+(`repositorios/postgres/operaciones_pg.py`), que recibe y devuelve las mismas
+dataclasses definidas en `dominio/modelos.py`.

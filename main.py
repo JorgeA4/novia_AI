@@ -50,13 +50,27 @@ def main() -> None:
     if str(raiz) not in sys.path:
         sys.path.insert(0, str(raiz))
 
-    # Cargar .env antes de importar la app (que lee os.environ en __init__)
+    # Cargar .env antes de importar los módulos (que leen os.environ al importar)
     _cargar_dotenv(raiz / ".env")
 
     # Importar aquí para que sys.path ya esté configurado
-    from interfaz.app import NoviApp  # noqa: PLC0415
+    from dominio.configuracion import cfg  # noqa: PLC0415
+    from dominio.embedding import ServicioEmbedding  # noqa: PLC0415
+    from aplicacion.gestor_turno import GestorTurno  # noqa: PLC0415
+    from interfaz.app import (  # noqa: PLC0415
+        NoviApp,
+        _asegurar_datos_iniciales,
+        _crear_cliente_llm,
+    )
+    from repositorios.json.factoria import crear_repositorios  # noqa: PLC0415
 
-    NoviApp().run()
+    ruta_datos = Path(os.environ.get("NOVIA_DATOS", "data"))
+    repos = crear_repositorios(ruta_datos)
+    _asegurar_datos_iniciales(repos)
+    cliente = _crear_cliente_llm()
+    servicio_embedding = ServicioEmbedding(cfg.embedding.modelo)
+    gestor = GestorTurno(repos, cliente, servicio_embedding)
+    NoviApp(repos=repos, gestor=gestor).run()
 
 
 if __name__ == "__main__":

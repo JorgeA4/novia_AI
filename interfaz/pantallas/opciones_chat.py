@@ -18,7 +18,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
 from dominio.modelos import Relacion
-from repositorios.json.factoria import Repositorios
+from repositorios.interfaces import Repositorios
 
 
 class PantallaOpcionesChat(ModalScreen):

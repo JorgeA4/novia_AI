@@ -6,11 +6,16 @@ La capa de aplicación solo importa desde este módulo, nunca desde
 implementaciones concretas. Esto garantiza que cambiar de JSON a BD
 no requiere tocar ningún código de aplicación.
 
+`Repositorios` es el contenedor de instancias concretas que se inyecta
+en `GestorTurno` y en la interfaz. Cada implementación (JSON, Postgres…)
+debe devolver un objeto con exactamente estos campos y tipos.
+
 Regla: este módulo no importa nada de persistencia concreta ni de interfaz.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 from dominio.modelos import (
@@ -168,3 +173,29 @@ class RepositorioPerfilUsuario(Protocol):
         relacion_id: int,
         confianza_minima: float = 0.0,
     ) -> list[PerfilUsuario]: ...
+
+
+# ---------------------------------------------------------------------------
+# Contenedor de repositorios — tipo compartido entre todas las implementaciones
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Repositorios:
+    """
+    Contenedor con todos los repositorios instanciados.
+
+    Se define aquí (en interfaces) para que la capa de aplicación y la
+    interfaz puedan anotarse con este tipo sin importar ninguna
+    implementación concreta. Cada factoría (JSON, Postgres…) devuelve
+    una instancia de este mismo dataclass con sus repositorios concretos.
+    """
+    catalogos: RepositorioCatalogos
+    personaje: RepositorioPersonaje
+    usuario: RepositorioUsuario
+    relacion: RepositorioRelacion
+    estado: RepositorioEstado
+    mensaje: RepositorioMensaje
+    evento: RepositorioEvento
+    conflicto: RepositorioConflicto
+    recuerdo: RepositorioRecuerdo
+    perfil_usuario: RepositorioPerfilUsuario

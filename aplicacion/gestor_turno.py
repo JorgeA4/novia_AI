@@ -55,7 +55,7 @@ from dominio.relacion import (
     recalcular_familiaridad,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
-from repositorios.json.factoria import Repositorios
+from repositorios.interfaces import Repositorios
 
 
 # ---------------------------------------------------------------------------
@@ -104,59 +104,22 @@ class DiagnosticoContexto:
 
 
 # ---------------------------------------------------------------------------
-# Condiciones de transición de etapa
+# Condiciones de transición de etapa — se leen de configuracion.json
 # ---------------------------------------------------------------------------
-# TODO: mover a un fichero de configuración o catálogo cuando el diseño
-# de las condiciones exactas esté finalizado (ver logica_interna.md).
 
-CONDICIONES_TRANSICION: list[CondicionTransicion] = [
-    CondicionTransicion(
-        desde_id="desconocidos",
-        hasta_id="conocidos",
-        familiaridad_min=0.08,
-    ),
-    CondicionTransicion(
-        desde_id="conocidos",
-        hasta_id="amigos",
-        familiaridad_min=0.18,
-        confianza_min=0.30,
-    ),
-    CondicionTransicion(
-        desde_id="amigos",
-        hasta_id="amigos_cercanos",
-        familiaridad_min=0.30,
-        confianza_min=0.50,
-        afecto_min=0.45,
-        tension_max=0.40,
-    ),
-    CondicionTransicion(
-        desde_id="amigos_cercanos",
-        hasta_id="interes_romantico",
-        confianza_min=0.60,
-        afecto_min=0.60,
-        tension_max=0.25,
-    ),
-    CondicionTransicion(
-        desde_id="interes_romantico",
-        hasta_id="pareja",
-        confianza_min=0.70,
-        afecto_min=0.75,
-        tension_max=0.20,
-    ),
-    # Retrocesos
-    CondicionTransicion(
-        desde_id="amigos",
-        hasta_id="conocidos",
-        tension_max=None,
-        afecto_min=None,
-    ),
-    CondicionTransicion(
-        desde_id="pareja",
-        hasta_id="distanciamiento",
-        tension_max=None,
-        afecto_min=None,
-    ),
-]
+def _condiciones_desde_cfg() -> list[CondicionTransicion]:
+    """Convierte las entradas de cfg.transiciones_condiciones en CondicionTransicion del dominio."""
+    return [
+        CondicionTransicion(
+            desde_id=c.desde_id,
+            hasta_id=c.hasta_id,
+            confianza_min=c.confianza_min,
+            afecto_min=c.afecto_min,
+            familiaridad_min=c.familiaridad_min,
+            tension_max=c.tension_max,
+        )
+        for c in cfg.transiciones_condiciones
+    ]
 
 # ---------------------------------------------------------------------------
 # Resultado del turno
@@ -476,7 +439,7 @@ class GestorTurno:
 
         transiciones = repos.catalogos.obtener_transiciones_etapa()
         resultado_transicion = buscar_transicion_elegible(
-            relacion, transiciones, CONDICIONES_TRANSICION
+            relacion, transiciones, _condiciones_desde_cfg()
         )
 
         if resultado_transicion is not None:
@@ -581,7 +544,7 @@ def _gestionar_conflictos(
 
     Los errores de formato del LLM se ignoran silenciosamente.
     """
-    from repositorios.json.factoria import Repositorios as _Repos  # solo para tipado
+    from repositorios.interfaces import Repositorios as _Repos  # solo para tipado
 
     nums_activos = {c.num for c in conflictos_activos}
 

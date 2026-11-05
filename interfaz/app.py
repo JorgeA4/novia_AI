@@ -41,7 +41,8 @@ from dominio.configuracion import cfg
 from dominio.embedding import ServicioEmbedding
 from dominio.modelos import Estado, Personaje, Relacion, Usuario
 from interfaz.pantallas.menu_principal import MenuPrincipal
-from repositorios.json.factoria import Repositorios, crear_repositorios
+from repositorios.interfaces import Repositorios
+from repositorios.json.factoria import crear_repositorios
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +134,13 @@ def _asegurar_datos_iniciales(repos: Repositorios) -> None:
 # ---------------------------------------------------------------------------
 
 class NoviApp(App):
-    """Aplicación principal."""
+    """
+    Aplicación principal.
+
+    Recibe los repositorios y el gestor ya construidos desde fuera,
+    lo que permite elegir la implementación de persistencia (JSON,
+    Postgres…) sin modificar esta clase.
+    """
 
     TITLE = "novia_AI"
     SUB_TITLE = "conversación"
@@ -144,23 +151,10 @@ class NoviApp(App):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, repos: Repositorios, gestor: GestorTurno) -> None:
         super().__init__()
-
-        # Directorio de datos
-        ruta_datos = Path(os.environ.get("NOVIA_DATOS", "data"))
-
-        # Repositorios
-        self._repos = crear_repositorios(ruta_datos)
-        _asegurar_datos_iniciales(self._repos)
-
-        # Cliente LLM — se elige el proveedor según PROVEEDOR (o heurística por clave)
-        cliente = _crear_cliente_llm()
-
-        # Servicio de embeddings — instancia única para toda la sesión (lazy load)
-        servicio_embedding = ServicioEmbedding(cfg.embedding.modelo)
-
-        self._gestor = GestorTurno(self._repos, cliente, servicio_embedding)
+        self._repos = repos
+        self._gestor = gestor
 
     def on_mount(self) -> None:
         """Al montar, ajustar subtítulo con el proveedor activo."""
@@ -221,11 +215,25 @@ def _nombre_proveedor_activo() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Punto de entrada
+# Punto de entrada (usado por `python -m interfaz`)
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    NoviApp().run()
+    """
+    Construye la pila JSON y arranca la app.
+    Se usa cuando se lanza con `python -m interfaz` (sin carga de .env).
+    Para `python main.py`, la construcción ocurre en main.py.
+    """
+    import os
+    from pathlib import Path as _Path
+
+    ruta_datos = _Path(os.environ.get("NOVIA_DATOS", "data"))
+    repos = crear_repositorios(ruta_datos)
+    _asegurar_datos_iniciales(repos)
+    cliente = _crear_cliente_llm()
+    servicio_embedding = ServicioEmbedding(cfg.embedding.modelo)
+    gestor = GestorTurno(repos, cliente, servicio_embedding)
+    NoviApp(repos=repos, gestor=gestor).run()
 
 
 if __name__ == "__main__":
