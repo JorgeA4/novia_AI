@@ -5,3 +5,13 @@ __pycache__/
 .env
 .bob
 documentacion/chat_mitsuki.txt
+# Datos de usuario (excluir todo excepto catálogos y configuración)
+data/conflictos.json
+data/estados.json
+data/eventos.json
+data/mensajes.json
+data/perfil_usuario.json
+data/personajes.json
+data/recuerdos.json
+data/relaciones.json
+data/usuarios.json
