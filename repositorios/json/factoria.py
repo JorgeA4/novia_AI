@@ -8,9 +8,9 @@ por inyección de dependencias.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
+from repositorios.interfaces import Repositorios  # noqa: F401 — re-exportado para compatibilidad
 from repositorios.json.catalogos_json import CatalogosJson
 from repositorios.json.entidades_json import (
     EstadoJson,
@@ -25,21 +25,6 @@ from repositorios.json.operaciones_json import (
     PerfilUsuarioJson,
     RecuerdoJson,
 )
-
-
-@dataclass
-class Repositorios:
-    """Contenedor con todos los repositorios instanciados."""
-    catalogos: CatalogosJson
-    personaje: PersonajeJson
-    usuario: UsuarioJson
-    relacion: RelacionJson
-    estado: EstadoJson
-    mensaje: MensajeJson
-    evento: EventoJson
-    conflicto: ConflictoJsonConEventos
-    recuerdo: RecuerdoJson
-    perfil_usuario: PerfilUsuarioJson
 
 
 def crear_repositorios(directorio_datos: Path) -> Repositorios:
