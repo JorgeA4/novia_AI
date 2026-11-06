@@ -135,7 +135,7 @@ delta_nuevo = delta_anterior × α + cambio_real × (1 − α)
 
 `α` se lee de config (`relacion.ema_alpha`). El delta no decae con el tiempo — solo cambia cuando hay un evento que modifica la métrica.
 
-`familiaridad` y `tension` no tienen `_delta`: `familiaridad` en la práctica solo sube, y `tension` ya tiene carácter direccional implícito en su valor.
+`familiaridad` y `tension` no tienen `_delta`: `familiaridad` en la práctica solo sube mediante interacción, aunque decae lentamente durante el silencio, y `tension` ya tiene carácter direccional implícito en su valor.
 
 `atraccion` y `atraccion_delta` siguen el mismo mecanismo que `afecto` — aplican cap y resistencia en extremos. Ver sección "Atracción romántica" más abajo.
 
@@ -241,6 +241,10 @@ Tres campos opcionales en `PERSONAJE` configuran cómo crece la atracción:
 | `matiz_atraccion`   | texto    | matiz libre de 1-2 frases para afinar la guía al LLM                |
 
 Si los tres son `None`, el sistema no envía ninguna guía de atracción al LLM.
+
+### Decaimiento por ausencia
+
+La `atraccion` decae exponencialmente durante el tiempo sin interacción, con una semivida configurable de 60 días por defecto (`relacion.atraccion_semivida_dias`). Se aplica antes de procesar el siguiente turno y tiende hacia `0.0` sin afectar directamente a `confianza`, `afecto`, `disposicion` ni `tension`.
 
 ### `atraccion` como señal narrativa
 

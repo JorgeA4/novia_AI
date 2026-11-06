@@ -94,6 +94,7 @@ class ConfigRelacion:
     familiaridad_semivida_dias: float       # días para que la familiaridad sin interacción baje a la mitad
     tension_semivida_horas: float           # horas para que la tensión sin fricción baje a la mitad
     tension_reduccion_por_afecto: float     # fracción del afecto positivo que reduce tensión en cada turno
+    atraccion_semivida_dias: float          # días para que la atracción sin interacción baje a la mitad
 
 
 @dataclass(frozen=True)

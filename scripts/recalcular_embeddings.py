@@ -34,7 +34,9 @@ def recalcular(relacion_id: int | None = None) -> None:
     if relacion_id is not None:
         ids_relacion = [relacion_id]
     else:
-        ids_relacion = [r.num for r in repos.relacion.listar_todas()]
+        import json
+        relaciones_raw = json.loads((ruta_datos / "relaciones.json").read_text(encoding="utf-8"))
+        ids_relacion = [r["num"] for r in relaciones_raw]
 
     total_actualizados = 0
 

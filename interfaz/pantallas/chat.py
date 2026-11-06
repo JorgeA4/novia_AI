@@ -167,6 +167,8 @@ class PantallaChat(Screen):
             afecto=relacion.afecto,
             familiaridad=relacion.familiaridad,
             tension=relacion.tension,
+            disposicion=relacion.disposicion,
+            atraccion=relacion.atraccion,
         )
 
     @on(Button.Pressed, "#boton-menu")

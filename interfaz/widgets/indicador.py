@@ -89,6 +89,8 @@ class IndicadorEstado(Widget):
         self._afecto = 0.0
         self._familiaridad = 0.0
         self._tension = 0.0
+        self._disposicion = 0.0
+        self._atraccion = 0.0
 
     def compose(self) -> ComposeResult:
         yield Label("Estado de la relación", classes="indicador-titulo")
@@ -129,6 +131,10 @@ class IndicadorEstado(Widget):
         yield Label(self._barra(self._familiaridad), id="ind-familiaridad", classes="indicador-barra", markup=False)
         yield Label("Tensión:", classes="indicador-etiqueta")
         yield Label(self._barra(self._tension), id="ind-tension", classes="indicador-barra-tension", markup=False)
+        yield Label("Disposición:", classes="indicador-etiqueta")
+        yield Label(self._barra(self._disposicion), id="ind-disposicion", classes="indicador-barra", markup=False)
+        yield Label("Atracción:", classes="indicador-etiqueta")
+        yield Label(self._barra(self._atraccion), id="ind-atraccion", classes="indicador-barra", markup=False)
 
     def actualizar(
         self,
@@ -143,6 +149,8 @@ class IndicadorEstado(Widget):
         afecto: float,
         familiaridad: float,
         tension: float,
+        disposicion: float = 0.0,
+        atraccion: float = 0.0,
     ) -> None:
         """Actualiza todos los valores del panel y refresca los labels."""
         self._etapa = etapa
@@ -156,6 +164,8 @@ class IndicadorEstado(Widget):
         self._afecto = afecto
         self._familiaridad = familiaridad
         self._tension = tension
+        self._disposicion = disposicion
+        self._atraccion = atraccion
 
         self.query_one("#ind-etapa", Label).update(Text(etapa))
         self.query_one("#ind-emocion", Label).update(
@@ -171,6 +181,8 @@ class IndicadorEstado(Widget):
         self.query_one("#ind-afecto", Label).update(Text(self._barra(afecto)))
         self.query_one("#ind-familiaridad", Label).update(Text(self._barra(familiaridad)))
         self.query_one("#ind-tension", Label).update(Text(self._barra(tension)))
+        self.query_one("#ind-disposicion", Label).update(Text(self._barra(disposicion)))
+        self.query_one("#ind-atraccion", Label).update(Text(self._barra(atraccion)))
 
     @staticmethod
     def _barra(valor: float, ancho: int = 20) -> str:

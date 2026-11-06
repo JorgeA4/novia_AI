@@ -46,7 +46,8 @@
     "familiaridad_escala_mensajes": 800.0,
     "familiaridad_semivida_dias": 60.0,
     "tension_semivida_horas": 12.0,
-    "tension_reduccion_por_afecto": 0.3
+    "tension_reduccion_por_afecto": 0.3,
+    "atraccion_semivida_dias": 60.0
   },
 
   "recuerdos": {

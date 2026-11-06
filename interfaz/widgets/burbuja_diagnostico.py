@@ -156,8 +156,17 @@ class BurbujaDiagnostico(Widget):
                 markup=False,
             )
             yield Label(
-                f"  tensión:   +{d.delta_tension:.2f}",
-                classes="diag-delta-neg" if d.delta_tension >= 0.05 else "diag-delta-neu",
+                f"  tensión:   {d.delta_tension:+.2f}",
+                classes=(
+                    "diag-delta-neg" if d.delta_tension >= 0.05
+                    else "diag-delta-pos" if d.delta_tension <= -0.05
+                    else "diag-delta-neu"
+                ),
+                markup=False,
+            )
+            yield Label(
+                f"  atracción: {d.delta_atraccion:+.2f}",
+                classes=_clase_delta(d.delta_atraccion),
                 markup=False,
             )
 
@@ -168,6 +177,12 @@ class BurbujaDiagnostico(Widget):
                 f"afecto: {d.afecto_pre:.2f}  "
                 f"tensión: {d.tension_pre:.2f}  "
                 f"familiar.: {d.familiaridad_pre:.2f}",
+                classes="diag-linea",
+                markup=False,
+            )
+            yield Label(
+                f"  disposición: {d.disposicion_pre:.2f}  "
+                f"atracción: {d.atraccion_pre:.2f}",
                 classes="diag-linea",
                 markup=False,
             )

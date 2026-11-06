@@ -50,6 +50,7 @@ from dominio.relacion import (
     buscar_transicion_elegible,
     calcular_delta_disposicion,
     calcular_interes_actual,
+    decaer_atraccion,
     decaer_familiaridad,
     decaer_tension,
     recalcular_familiaridad,
@@ -89,12 +90,15 @@ class DiagnosticoContexto:
     delta_afecto: float
     delta_confianza: float
     delta_tension: float
+    delta_atraccion: float
 
     # Métricas de relación PRE-turno (para comparar con las post-turno del panel de estado)
     confianza_pre: float
     afecto_pre: float
     tension_pre: float
     familiaridad_pre: float
+    disposicion_pre: float
+    atraccion_pre: float
 
     # Interés de contacto calculado (disposición + ánimo + tiempo sin hablar)
     interes_actual: float
@@ -178,12 +182,13 @@ class GestorTurno:
             fecha=ahora,
         ))
 
-        # --- 4. Decaimiento emocional + familiar + tensión (incluye deriva del sentimiento — Brecha 3) ---
+        # --- 4. Decaimiento emocional + relación (incluye deriva del sentimiento — Brecha 3) ---
         segundos = (ahora - estado.ult_interaccion).total_seconds()
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
             relacion = decaer_familiaridad(relacion, segundos)
             relacion = decaer_tension(relacion, segundos)
+            relacion = decaer_atraccion(relacion, segundos)
 
         # --- 5. Construir contexto ---
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
@@ -260,6 +265,8 @@ class GestorTurno:
         _afecto_pre = relacion.afecto
         _tension_pre = relacion.tension
         _familiaridad_pre = relacion.familiaridad
+        _disposicion_pre = relacion.disposicion
+        _atraccion_pre = relacion.atraccion
 
         # --- 6. Llamar al LLM (única llamada del turno) ---
         texto_llm = self._llm.completar(payload)
@@ -314,10 +321,9 @@ class GestorTurno:
             return max(-1.0, min(1.0, float(v)))
 
         def _extraer_tension() -> float:
-            # La tensión solo sube (viene del LLM en [0.0, 1.0]); valores negativos
-            # son errores del LLM — se descartan silenciosamente.
+            # La tensión es bidireccional: positivo = fricción generada, negativo = tensión disuelta.
             v = turno.get("tension", 0.0)
-            return max(0.0, min(1.0, float(v)))
+            return max(-1.0, min(1.0, float(v)))
 
         deltas = DeltasRelacion(
             afecto=_extraer_delta("afecto"),
@@ -518,10 +524,13 @@ class GestorTurno:
             delta_afecto=deltas.afecto,
             delta_confianza=deltas.confianza,
             delta_tension=deltas.tension,
+            delta_atraccion=deltas.atraccion,
             confianza_pre=_confianza_pre,
             afecto_pre=_afecto_pre,
             tension_pre=_tension_pre,
             familiaridad_pre=_familiaridad_pre,
+            disposicion_pre=_disposicion_pre,
+            atraccion_pre=_atraccion_pre,
             interes_actual=interes,
             num_turno=_num_turno,
         )
@@ -593,7 +602,7 @@ def _gestionar_conflictos(
                     tipo_id="conflicto",
                     descripcion=causa,
                     fecha=ahora,
-                    impacto=-tension_delta,
+                    impacto=-abs(tension_delta),
                     resuelto=False,
                 )
                 repos.evento.guardar(evento)
@@ -640,7 +649,7 @@ def _gestionar_conflictos(
             tipo_id="conflicto",
             descripcion=causa_auto,
             fecha=ahora,
-            impacto=-tension_delta,
+            impacto=-abs(tension_delta),
             resuelto=False,
         )
         repos.evento.guardar(evento)

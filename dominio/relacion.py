@@ -369,9 +369,8 @@ def aplicar_deltas_turno(
     (métricas que evolucionan despacio a lo largo de semanas).
 
     tension NO usa cap ni resistencia: es una métrica reactiva que puede cambiar
-    rápidamente en un solo turno (igual que en la vida real). Se aplica el delta
-    del LLM directamente, más una reducción proporcional al afecto positivo del turno:
-        reduccion = cambio_afecto_real × tension_reduccion_por_afecto
+    rápidamente en un solo turno (igual que en la vida real). El delta del LLM es
+    bidireccional: positivo = fricción generada, negativo = tensión disuelta.
     """
     if cap is None:
         cap = cfg.relacion.cap_cotidiano
@@ -381,9 +380,7 @@ def aplicar_deltas_turno(
 
     # La tensión no usa cap ni resistencia: es una métrica reactiva que puede
     # cambiar rápidamente (a diferencia de afecto/confianza que evolucionan despacio).
-    # Reducción proporcional al afecto positivo del turno (ya pasó por cap y resistencia).
-    reduccion_por_afecto = -max(0.0, cambio_afecto) * cfg.relacion.tension_reduccion_por_afecto
-    nuevo_tension = _recortar(relacion.tension + deltas.tension + reduccion_por_afecto)
+    nuevo_tension = _recortar(relacion.tension + deltas.tension)
 
     nuevo_disposicion,  cambio_disposicion = _aplicar_cambio(relacion.disposicion,   deltas.disposicion,  cap)
     nuevo_atraccion,    cambio_atraccion   = _aplicar_cambio(relacion.atraccion,      deltas.atraccion,    cap)
@@ -436,7 +433,7 @@ def calcular_interes_actual(
     if ahora is None:
         ahora = datetime.now()
 
-    horas_sin_hablar = (ahora - estado.ultima_interaccion).total_seconds() / 3600.0
+    horas_sin_hablar = (ahora - estado.ult_interaccion).total_seconds() / 3600.0
     factor_tiempo = 1.0 - math.exp(-horas_sin_hablar / _TAU_HORAS)
 
     emocion_animo = catalogo_emociones.get(estado.estado_animo_id)
@@ -542,3 +539,22 @@ def decaer_familiaridad(
     tasa = _math.log(2) / semivida_segundos
     nueva = relacion.familiaridad * _math.exp(-tasa * segundos_transcurridos)
     return replace(relacion, familiaridad=_recortar(nueva))
+
+
+def decaer_atraccion(
+    relacion: Relacion,
+    segundos_transcurridos: float,
+) -> Relacion:
+    """
+    Aplica decaimiento exponencial a `atraccion` según el tiempo sin interacción.
+
+    La semivida configurada es de 60 días por defecto — el interés romántico
+    se desgasta lentamente, pero no queda congelado durante largos silencios.
+    No decae por debajo de 0.0.
+    """
+    import math as _math
+
+    semivida_segundos = cfg.relacion.atraccion_semivida_dias * 86400.0
+    tasa = _math.log(2) / semivida_segundos
+    nueva = relacion.atraccion * _math.exp(-tasa * segundos_transcurridos)
+    return replace(relacion, atraccion=_recortar(nueva))
