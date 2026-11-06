@@ -69,6 +69,8 @@ def nueva_relacion(num: int, personaje_id: int, usuario_id: int) -> Relacion:
         num=num,
         personaje_id=personaje_id,
         usuario_id=usuario_id,
+        ult_mensaje=datetime.now(),
+        satisfaccion_contacto=1.0,
         **RELACION_VALORES_INICIALES,
     )
 
@@ -82,6 +84,5 @@ def nuevo_estado(relacion_id: int, ahora: datetime | None = None) -> Estado:
     """
     return Estado(
         relacion_id=relacion_id,
-        ult_interaccion=ahora or datetime.now(),
         **ESTADO_VALORES_INICIALES,
     )

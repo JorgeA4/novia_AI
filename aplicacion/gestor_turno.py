@@ -52,8 +52,10 @@ from dominio.relacion import (
     calcular_interes_actual,
     decaer_atraccion,
     decaer_familiaridad,
+    decaer_satisfaccion_contacto,
     decaer_tension,
     recalcular_familiaridad,
+    actualizar_satisfaccion_contacto,
 )
 from dominio.confianza import confianza_final_de, resolver_duplicado
 from repositorios.interfaces import Repositorios
@@ -118,8 +120,11 @@ def _condiciones_desde_cfg() -> list[CondicionTransicion]:
             desde_id=c.desde_id,
             hasta_id=c.hasta_id,
             confianza_min=c.confianza_min,
+            confianza_max=c.confianza_max,
             afecto_min=c.afecto_min,
+            afecto_max=c.afecto_max,
             familiaridad_min=c.familiaridad_min,
+            familiaridad_max=c.familiaridad_max,
             tension_max=c.tension_max,
             tension_min=c.tension_min,
             atraccion_min=c.atraccion_min,
@@ -183,12 +188,17 @@ class GestorTurno:
         ))
 
         # --- 4. Decaimiento emocional + relación (incluye deriva del sentimiento — Brecha 3) ---
-        segundos = (ahora - estado.ult_interaccion).total_seconds()
+        segundos = (
+            (ahora - relacion.ult_mensaje).total_seconds()
+            if relacion.ult_mensaje is not None
+            else 0.0
+        )
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
             relacion = decaer_familiaridad(relacion, segundos)
             relacion = decaer_tension(relacion, segundos)
             relacion = decaer_atraccion(relacion, segundos)
+            relacion = decaer_satisfaccion_contacto(relacion, segundos)
 
         # --- 5. Construir contexto ---
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
@@ -312,7 +322,7 @@ class GestorTurno:
                 estado_animo_intensidad=animo_int_final,
             )
 
-        estado = replace(estado, ult_interaccion=ahora)
+        relacion = replace(relacion, ult_mensaje=ahora)
         repos.estado.guardar(estado)
 
         # --- 9a. Persistir deltas de relación ---
@@ -341,6 +351,12 @@ class GestorTurno:
         delta_disposicion = calcular_delta_disposicion(relacion)
         deltas_disposicion = DeltasRelacion(disposicion=delta_disposicion)
         relacion = aplicar_deltas_turno(relacion, deltas_disposicion)
+        relacion = actualizar_satisfaccion_contacto(
+            relacion,
+            texto_usuario,
+            respuesta,
+            deltas,
+        )
 
         impacto_neto = (deltas.afecto + deltas.confianza - deltas.tension) / 3.0
         repos.evento.guardar(Evento(

@@ -85,6 +85,8 @@ RELACION_DEFECTO = Relacion(
     tension=0.0,
     disposicion=0.5,
     disposicion_delta=0.0,
+    ult_mensaje=datetime.now(),
+    satisfaccion_contacto=1.0,
 )
 
 ESTADO_DEFECTO = Estado(
@@ -95,7 +97,6 @@ ESTADO_DEFECTO = Estado(
     estado_animo_intensidad=0.2,
     sentimiento_id="neutro",
     sentimiento_intensidad=0.1,
-    ult_interaccion=datetime.now(),
 )
 
 

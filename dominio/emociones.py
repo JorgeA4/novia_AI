@@ -385,7 +385,6 @@ def decaer_estado(
         estado_animo_intensidad=nuevo_estado_animo_intensidad,
         sentimiento_id=estado.sentimiento_id,
         sentimiento_intensidad=estado.sentimiento_intensidad,
-        ult_interaccion=estado.ult_interaccion,
     )
 
 

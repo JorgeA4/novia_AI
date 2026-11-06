@@ -35,7 +35,6 @@ _EPSILON: float = 1e-9
 
 # Accesos directos a la configuración (para legibilidad del módulo)
 _ALPHA_EMA: float = cfg.relacion.ema_alpha
-_TAU_HORAS: float = cfg.relacion.tau_horas_interes
 UMBRAL_IMPULSO_AUTOMATICO: float = cfg.relacion.umbral_impulso_automatico
 
 
@@ -124,6 +123,11 @@ def _recortar(valor: float) -> float:
     return max(0.0, min(1.0, valor))
 
 
+def _recortar_firmado(valor: float) -> float:
+    """Recorta un efecto direccional al rango [-1.0, 1.0]."""
+    return max(-1.0, min(1.0, valor))
+
+
 # ---------------------------------------------------------------------------
 # Condiciones de transición
 # ---------------------------------------------------------------------------
@@ -139,8 +143,11 @@ class CondicionTransicion:
     desde_id: str
     hasta_id: str
     confianza_min: Optional[float] = None
+    confianza_max: Optional[float] = None
     afecto_min: Optional[float] = None
+    afecto_max: Optional[float] = None
     familiaridad_min: Optional[float] = None
+    familiaridad_max: Optional[float] = None
     tension_max: Optional[float] = None
     tension_min: Optional[float] = None
     atraccion_min: Optional[float] = None
@@ -153,9 +160,15 @@ def condicion_cumplida(relacion: Relacion, condicion: CondicionTransicion) -> bo
     """
     if condicion.confianza_min is not None and relacion.confianza < condicion.confianza_min:
         return False
+    if condicion.confianza_max is not None and relacion.confianza > condicion.confianza_max:
+        return False
     if condicion.afecto_min is not None and relacion.afecto < condicion.afecto_min:
         return False
+    if condicion.afecto_max is not None and relacion.afecto > condicion.afecto_max:
+        return False
     if condicion.familiaridad_min is not None and relacion.familiaridad < condicion.familiaridad_min:
+        return False
+    if condicion.familiaridad_max is not None and relacion.familiaridad > condicion.familiaridad_max:
         return False
     if condicion.tension_max is not None and relacion.tension > condicion.tension_max:
         return False
@@ -212,11 +225,20 @@ def _cumple_con_margen(
     if condicion.confianza_min is not None:
         if relacion.confianza < condicion.confianza_min + margen - _EPSILON:
             return False
+    if condicion.confianza_max is not None:
+        if relacion.confianza > condicion.confianza_max - margen + _EPSILON:
+            return False
     if condicion.afecto_min is not None:
         if relacion.afecto < condicion.afecto_min + margen - _EPSILON:
             return False
+    if condicion.afecto_max is not None:
+        if relacion.afecto > condicion.afecto_max - margen + _EPSILON:
+            return False
     if condicion.familiaridad_min is not None:
         if relacion.familiaridad < condicion.familiaridad_min + margen - _EPSILON:
+            return False
+    if condicion.familiaridad_max is not None:
+        if relacion.familiaridad > condicion.familiaridad_max - margen + _EPSILON:
             return False
     if condicion.tension_max is not None:
         if relacion.tension > condicion.tension_max - margen + _EPSILON:
@@ -400,6 +422,54 @@ def aplicar_deltas_turno(
     )
 
 
+def decaer_satisfaccion_contacto(relacion: Relacion, segundos: float) -> Relacion:
+    """Reduce la satisfacción de contacto durante un período sin mensajes."""
+    horas = max(0.0, segundos / 3600.0)
+    disposicion = _recortar(relacion.disposicion)
+    semivida = cfg.relacion.semivida_satisfaccion_contacto_horas * (
+        cfg.relacion.factor_semivida_disposicion_maximo
+        - cfg.relacion.factor_semivida_disposicion_reduccion * disposicion
+    )
+    factor_decaimiento = math.exp(-math.log(2.0) * horas / semivida)
+    return replace(
+        relacion,
+        satisfaccion_contacto=_recortar(
+            relacion.satisfaccion_contacto * factor_decaimiento
+        ),
+    )
+
+
+def actualizar_satisfaccion_contacto(
+    relacion: Relacion,
+    texto_usuario: str,
+    respuesta_personaje: str,
+    deltas: DeltasRelacion,
+) -> Relacion:
+    """Aumenta la satisfacción según el intercambio y su tono."""
+    tau_caracteres = cfg.relacion.tau_caracteres_contacto
+    factor_usuario = 1.0 - math.exp(-len(texto_usuario) / tau_caracteres)
+    factor_personaje = 1.0 - math.exp(-len(respuesta_personaje) / tau_caracteres)
+    factor_bidireccional = min(factor_usuario, factor_personaje)
+    factor_tono = _recortar(
+        cfg.relacion.centro_satisfaccion_tono
+        + cfg.relacion.peso_satisfaccion_afecto * deltas.afecto
+        + cfg.relacion.peso_satisfaccion_confianza * deltas.confianza
+        - cfg.relacion.peso_satisfaccion_tension * deltas.tension
+    )
+    aporte = (
+        cfg.relacion.aporte_maximo_satisfaccion_contacto
+        * factor_bidireccional
+        * factor_tono
+    )
+    satisfaccion_nueva = relacion.satisfaccion_contacto + aporte * (
+        1.0 - relacion.satisfaccion_contacto
+    )
+    return replace(
+        relacion,
+        satisfaccion_contacto=_recortar(satisfaccion_nueva),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Interés de contacto en tiempo real
 # ---------------------------------------------------------------------------
@@ -416,10 +486,9 @@ def calcular_interes_actual(
     No se persiste — se calcula en cada turno que lo necesite.
 
     Fórmula (ver logica_interna.md):
-        factor_tiempo  = 1.0 − e^(−horas_sin_hablar / τ)
         interes_actual = disposicion × 0.50
                        + valencia_estado_animo_norm × 0.35
-                       + factor_tiempo × 0.15
+                       + efecto_temporal × 0.15
 
     Interpretación del resultado:
         < 0.25   → el personaje evita o ignora el contacto
@@ -433,8 +502,22 @@ def calcular_interes_actual(
     if ahora is None:
         ahora = datetime.now()
 
-    horas_sin_hablar = (ahora - estado.ult_interaccion).total_seconds() / 3600.0
-    factor_tiempo = 1.0 - math.exp(-horas_sin_hablar / _TAU_HORAS)
+    disposicion = _recortar(relacion.disposicion)
+    necesidad_contacto = 1.0 - _recortar(relacion.satisfaccion_contacto)
+    umbral_frustracion = (
+        cfg.relacion.umbral_frustracion_temporal_minimo
+        + disposicion
+        * (
+            cfg.relacion.umbral_frustracion_temporal_maximo
+            - cfg.relacion.umbral_frustracion_temporal_minimo
+        )
+    )
+    factor_temporal = (
+        necesidad_contacto
+        * (1.0 - necesidad_contacto / umbral_frustracion)
+        / (umbral_frustracion / cfg.relacion.normalizador_curva_temporal)
+    )
+    efecto_temporal = _recortar_firmado(factor_temporal)
 
     emocion_animo = catalogo_emociones.get(estado.estado_animo_id)
     if emocion_animo is not None:
@@ -443,9 +526,9 @@ def calcular_interes_actual(
         valencia_norm = 0.5   # neutral si no se encuentra la emoción
 
     interes = (
-        relacion.disposicion * 0.50
+        disposicion          * 0.50
         + valencia_norm      * 0.35
-        + factor_tiempo      * 0.15
+        + efecto_temporal    * 0.15
     )
     return _recortar(interes)
 

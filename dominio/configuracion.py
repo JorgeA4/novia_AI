@@ -80,7 +80,18 @@ class ConfigConfianzaLlm:
 @dataclass(frozen=True)
 class ConfigRelacion:
     ema_alpha: float
-    tau_horas_interes: float
+    semivida_satisfaccion_contacto_horas: float
+    factor_semivida_disposicion_maximo: float
+    factor_semivida_disposicion_reduccion: float
+    umbral_frustracion_temporal_minimo: float
+    umbral_frustracion_temporal_maximo: float
+    normalizador_curva_temporal: float
+    aporte_maximo_satisfaccion_contacto: float
+    tau_caracteres_contacto: float
+    centro_satisfaccion_tono: float
+    peso_satisfaccion_afecto: float
+    peso_satisfaccion_confianza: float
+    peso_satisfaccion_tension: float
     umbral_impulso_automatico: float
     cap_cotidiano: float
     cap_significativo: float
@@ -109,12 +120,15 @@ class ConfigRecuerdos:
 
 @dataclass(frozen=True)
 class ConfigTransicionCondicion:
-    """Umbral mínimo de una transición de etapa. Refleja dominio.relacion.CondicionTransicion."""
+    """Umbrales de una transición de etapa. Refleja dominio.relacion.CondicionTransicion."""
     desde_id: str
     hasta_id: str
     confianza_min: Optional[float] = None
+    confianza_max: Optional[float] = None
     afecto_min: Optional[float] = None
+    afecto_max: Optional[float] = None
     familiaridad_min: Optional[float] = None
+    familiaridad_max: Optional[float] = None
     tension_max: Optional[float] = None
     tension_min: Optional[float] = None
     atraccion_min: Optional[float] = None

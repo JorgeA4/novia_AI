@@ -153,6 +153,8 @@ class Relacion:
     atraccion: float = 0.0    # [0.0, 1.0] — interés romántico del personaje hacia este usuario
     atraccion_delta: float = 0.0  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
     instrucciones_llm: Optional[str] = None  # instrucciones de estilo/comportamiento para el LLM
+    ult_mensaje: datetime | None = None
+    satisfaccion_contacto: float = 1.0
 
 
 @dataclass
@@ -172,7 +174,6 @@ class Estado:
     estado_animo_intensidad: float  # [0.0, 1.0]
     sentimiento_id: str             # FK -> Emocion.codigo, capa "sentimiento"
     sentimiento_intensidad: float   # [0.0, 1.0]
-    ult_interaccion: datetime
 
 
 @dataclass

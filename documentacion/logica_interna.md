@@ -146,11 +146,90 @@ delta_nuevo = delta_anterior × α + cambio_real × (1 − α)
 Calculado en tiempo real, no persistido:
 
 ```
-factor_tiempo  = 1.0 − e^(−horas_sin_hablar / τ)          [τ en config]
+necesidad_contacto = 1 − satisfaccion_contacto
+
+umbral_frustracion = umbral_frustracion_minimo
+                   + disposicion × (
+                       umbral_frustracion_maximo − umbral_frustracion_minimo
+                     )
+
+factor_temporal = necesidad_contacto
+                × (1 − necesidad_contacto / umbral_frustracion)
+                / (umbral_frustracion / normalizador_curva_temporal)
+
+efecto_temporal = recortar(factor_temporal, −1, 1)
+
 interes_actual = disposicion                    × 0.50
                + valencia_estado_animo_norm     × 0.35
-               + factor_tiempo                  × 0.15
+               + efecto_temporal                × 0.15
 ```
+
+La curva tiene un pico corto: empieza en `0.0`, alcanza su máximo alrededor de
+la mitad del umbral de frustración, vuelve a `0.0` al alcanzar dicho umbral y
+se vuelve negativa cuando la necesidad lo supera. El umbral aumenta con la
+disposición, por lo que una disposición alta tolera más necesidad antes de
+interpretar la ausencia como desgaste.
+
+### `satisfaccion_contacto`
+
+`satisfaccion_contacto` es un depósito que participa en el cálculo de
+`interes_actual`. Empieza en `1.0` para una relación nueva, decae durante el
+silencio y aumenta después de cada turno completado.
+
+La semivida depende inversamente de la disposición:
+
+```
+semivida = semivida_base × (
+    factor_semivida_disposicion_maximo
+    − factor_semivida_disposicion_reduccion × disposicion
+)
+
+satisfaccion_decaida = satisfaccion_contacto ×
+    e^(−ln(2) × horas_sin_mensaje / semivida)
+```
+
+Una disposición alta hace que las ganas de volver a hablar reaparezcan antes;
+por eso la satisfacción se consume más rápido. Una disposición baja conserva
+la satisfacción durante más tiempo.
+
+El aporte de un turno se calcula con la participación de ambas partes:
+
+```
+factor_usuario = 1 − e^(−longitud(texto_usuario) / tau_caracteres)
+factor_personaje = 1 − e^(−longitud(respuesta_personaje) / tau_caracteres)
+factor_bidireccional = min(factor_usuario, factor_personaje)
+```
+
+El tono usa los deltas del turno, no atributos inexistentes de `RELACION`:
+
+```
+factor_tono = recortar(
+    centro_satisfaccion_tono
+    + peso_satisfaccion_afecto × delta_afecto
+    + peso_satisfaccion_confianza × delta_confianza
+    − peso_satisfaccion_tension × delta_tension,
+    0, 1
+)
+```
+
+En el código, `delta_afecto`, `delta_confianza` y `delta_tension` son
+`deltas.afecto`, `deltas.confianza` y `deltas.tension`, respectivamente.
+
+```
+aporte = aporte_maximo_satisfaccion_contacto
+       × factor_bidireccional
+       × factor_tono
+
+satisfaccion_nueva = recortar(
+    satisfaccion_decaida
+    + aporte × (1 − satisfaccion_decaida),
+    0, 1
+)
+```
+
+El último término produce saturación: un único mensaje no puede llevar la
+satisfacción directamente a `1.0`, y cada turno posterior aporta menos cuando
+el depósito ya está lleno.
 
 `valencia_estado_animo_norm = (valencia + 1.0) / 2.0`
 
@@ -203,7 +282,7 @@ desconocidos → conocidos → amigos → amigos_cercanos → pareja
 ```
 La etapa `interes_romantico` fue eliminada. El interés romántico se modela ahora como la métrica continua `atraccion` en `RELACION`, no como una etapa intermedia.
 
-Las condiciones de umbral de cada transición (`confianza_min`, `afecto_min`, `familiaridad_min`, `tension_max`, `atraccion_min`) se definen en `data/configuracion.json` bajo la clave `transiciones_condiciones` y se leen en `dominio/configuracion.py` como `cfg.transiciones_condiciones`. Son editables sin tocar código.
+Las condiciones de umbral de cada transición (`confianza_min`, `confianza_max`, `afecto_min`, `afecto_max`, `familiaridad_min`, `familiaridad_max`, `tension_max`, `tension_min`, `atraccion_min`) se definen en `data/configuracion.json` bajo la clave `transiciones_condiciones` y se leen en `dominio/configuracion.py` como `cfg.transiciones_condiciones`. Son editables sin tocar código. Las condiciones de una misma transición se combinan con AND.
 
 La transición `amigos_cercanos → pareja` requiere adicionalmente `atraccion >= atraccion_min` (0.60 por defecto).
 
@@ -211,7 +290,7 @@ El modo de activación:
 - **Impulso automático** — condiciones superadas con margen suficiente (`umbral_impulso_automatico` en config)
 - **Permiso** — condiciones cumplidas pero se necesita un momento decisivo (el sistema hace una llamada auxiliar al LLM para verificarlo)
 
-**Transiciones solo-permiso:** algunas transiciones nunca se activan por impulso automático, independientemente de los umbrales. Se listan en `data/configuracion.json` bajo `transiciones_solo_permiso`. Actualmente: `amigos_cercanos → pareja`. El razonamiento es que stats altos solos no bastan para que alguien decida ser pareja de otra persona — siempre se necesita un momento decisivo explícito.
+**Transiciones solo-permiso:** algunas transiciones nunca se activan por impulso automático, independientemente de los umbrales. Se listan en `data/configuracion.json` bajo `transiciones_solo_permiso`. Actualmente son `amigos → conocidos`, `amigos_cercanos → amigos` y `amigos_cercanos → pareja`. Los retrocesos requieren deterioro claro y un momento decisivo explícito; todavía no se exige que el deterioro persista varios turnos.
 
 Al avanzar de etapa, el sentimiento se actualiza: el sistema asigna el sentimiento correspondiente a la nueva etapa y suma `delta_sentimiento_al_avanzar` (config) a la intensidad vigente.
 

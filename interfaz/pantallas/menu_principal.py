@@ -87,15 +87,15 @@ class TarjetaChat(Static):
         self,
         relacion: Relacion,
         personaje: Personaje,
-        ult_interaccion: datetime,
+        ult_mensaje: datetime,
     ) -> None:
         super().__init__()
         self._relacion = relacion
         self._personaje = personaje
-        self._ult_interaccion = ult_interaccion
+        self._ult_mensaje = ult_mensaje
 
     def compose(self) -> ComposeResult:
-        tiempo = _tiempo_relativo(self._ult_interaccion)
+        tiempo = _tiempo_relativo(self._ult_mensaje)
         meta = f"{self._personaje.mbti_id} · {self._personaje.eneagrama_id}  ·  {self._relacion.etapa_id}  ·  {tiempo}"
 
         with Vertical(id="fila-principal"):
@@ -189,8 +189,7 @@ class MenuPrincipal(Screen):
                 for relacion in relaciones:
                     try:
                         personaje = self._repos.personaje.obtener(relacion.personaje_id)
-                        estado = self._repos.estado.obtener(relacion.num)
-                        yield TarjetaChat(relacion, personaje, estado.ult_interaccion)
+                        yield TarjetaChat(relacion, personaje, relacion.ult_mensaje)
                     except KeyError:
                         pass
         with Horizontal(id="pie-menu"):

@@ -101,7 +101,9 @@ class RelacionJson:
     def guardar(self, relacion: Relacion) -> None:
         registros = leer_json(self._ruta)
         registros = [r for r in registros if r["num"] != relacion.num]
-        registros.append(asdict(relacion))
+        d = asdict(relacion)
+        d["ult_mensaje"] = relacion.ult_mensaje.isoformat() if relacion.ult_mensaje else None
+        registros.append(d)
         escribir_json(self._ruta, registros)
 
     def listar_por_personaje(self, personaje_id: int) -> list[Relacion]:
@@ -135,6 +137,8 @@ def _dict_a_relacion(d: dict) -> Relacion:
         atraccion=d.get("atraccion", 0.0),
         atraccion_delta=d.get("atraccion_delta", 0.0),
         instrucciones_llm=d.get("instrucciones_llm") or None,
+        ult_mensaje=parsear_datetime(d["ult_mensaje"]) if d.get("ult_mensaje") else None,
+        satisfaccion_contacto=d.get("satisfaccion_contacto", 1.0),
     )
 
 
@@ -155,9 +159,7 @@ class EstadoJson:
     def guardar(self, estado: Estado) -> None:
         registros = leer_json(self._ruta)
         registros = [r for r in registros if r["relacion_id"] != estado.relacion_id]
-        d = asdict(estado)
-        d["ult_interaccion"] = estado.ult_interaccion.isoformat()
-        registros.append(d)
+        registros.append(asdict(estado))
         escribir_json(self._ruta, registros)
 
     def eliminar(self, relacion_id: int) -> None:
@@ -175,5 +177,4 @@ def _dict_a_estado(d: dict) -> Estado:
         estado_animo_intensidad=d["estado_animo_intensidad"],
         sentimiento_id=d["sentimiento_id"],
         sentimiento_intensidad=d["sentimiento_intensidad"],
-        ult_interaccion=parsear_datetime(d["ult_interaccion"]),
     )

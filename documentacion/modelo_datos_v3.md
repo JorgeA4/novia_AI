@@ -152,7 +152,6 @@ estado_animo_id         → STR (FK -> EMOCION.codigo, capa "estado_animo")
 estado_animo_intensidad → FLOAT (0.0 – 1.0)
 sentimiento_id          → STR (FK -> EMOCION.codigo, capa "sentimiento")
 sentimiento_intensidad  → FLOAT (0.0 – 1.0)
-ult_interaccion         → DATETIME
 
 ------------------------------------------------------
 
@@ -162,7 +161,7 @@ Vínculo entre un personaje y un usuario. Evoluciona con el tiempo y con los eve
 
 Los campos `_delta` capturan la tasa de cambio reciente de su métrica asociada — calculada como media exponencial de los últimos cambios. Un delta positivo indica crecimiento sostenido; negativo, declive. Permiten distinguir un valor de 0.5 que va en subida de uno que va en bajada, lo que afecta tanto al tono de respuesta del personaje como al cálculo de `interes_actual`.
 
-`disposicion` representa la tendencia base del personaje a buscar o recibir contacto con este usuario. No es aprecio (`afecto`) ni conocimiento (`familiaridad`), sino la tracción hacia el encuentro. `interes_actual` se calcula a partir de `disposicion`, el estado emocional presente y el tiempo sin hablar — ver lógica interna.
+`disposicion` representa la tendencia base del personaje a buscar o recibir contacto con este usuario. No es aprecio (`afecto`) ni conocimiento (`familiaridad`), sino la tracción hacia el encuentro. `satisfaccion_contacto` representa cuánto contacto reciente ha recibido el personaje y reduce temporalmente la presión de seguir interactuando. `interes_actual` se calcula a partir de `disposicion`, el estado emocional presente, el tiempo sin hablar y `satisfaccion_contacto` — ver lógica interna.
 
 ### Campos
 
@@ -181,6 +180,8 @@ disposicion_delta   → FLOAT (-1.0 – 1.0)
 atraccion           → FLOAT (0.0 – 1.0)   — interés romántico del personaje hacia este usuario; 0.0 si no hay perfil de atracción definido
 atraccion_delta     → FLOAT (-1.0 – 1.0)  — tasa de cambio reciente (EMA)
 instrucciones_llm   → STR (opcional — None si no hay instrucciones)
+ult_mensaje         → DATETIME — fecha del último mensaje de la relación
+satisfaccion_contacto → FLOAT (0.0 – 1.0) — nivel de contacto reciente satisfecho; decae con el tiempo
 
 ------------------------------------------------------
 
