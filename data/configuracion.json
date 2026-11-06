@@ -64,15 +64,21 @@
   },
 
   "transiciones_condiciones": [
-    { "desde_id": "desconocidos",      "hasta_id": "conocidos",          "familiaridad_min": 0.08 },
-    { "desde_id": "conocidos",         "hasta_id": "amigos",             "familiaridad_min": 0.18, "confianza_min": 0.30 },
-    { "desde_id": "amigos",            "hasta_id": "amigos_cercanos",    "familiaridad_min": 0.30, "confianza_min": 0.50, "afecto_min": 0.45, "tension_max": 0.40 },
-    { "desde_id": "amigos_cercanos",   "hasta_id": "interes_romantico",  "confianza_min": 0.60, "afecto_min": 0.60, "tension_max": 0.25 },
-    { "desde_id": "interes_romantico", "hasta_id": "pareja",             "confianza_min": 0.70, "afecto_min": 0.75, "tension_max": 0.20 },
-    { "desde_id": "amigos",            "hasta_id": "conocidos" },
-    { "desde_id": "pareja",            "hasta_id": "distanciamiento" }
+    { "desde_id": "desconocidos",    "hasta_id": "conocidos",       "familiaridad_min": 0.08 },
+    { "desde_id": "conocidos",       "hasta_id": "amigos",          "familiaridad_min": 0.18, "confianza_min": 0.30 },
+    { "desde_id": "amigos",          "hasta_id": "amigos_cercanos", "familiaridad_min": 0.30, "confianza_min": 0.50, "afecto_min": 0.45, "tension_max": 0.40 },
+    { "desde_id": "amigos_cercanos", "hasta_id": "pareja",          "confianza_min": 0.70, "afecto_min": 0.70, "tension_max": 0.20, "atraccion_min": 0.60 },
+    { "desde_id": "amigos",          "hasta_id": "conocidos" },
+    { "desde_id": "amigos_cercanos", "hasta_id": "amigos",          "tension_min": 0.50 },
+    { "desde_id": "pareja",          "hasta_id": "distanciamiento" },
+    { "desde_id": "pareja",          "hasta_id": "ruptura" },
+    { "desde_id": "distanciamiento", "hasta_id": "ruptura" }
   ],
 
+
+  "transiciones_solo_permiso": [
+    {"desde_id": "amigos_cercanos", "hasta_id": "pareja"}
+  ],
 
   "conflictos": {
     "umbral_tension_crear": 0.15,

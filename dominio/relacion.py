@@ -55,6 +55,7 @@ class DeltasRelacion(NamedTuple):
     familiaridad: float = 0.0
     tension: float = 0.0
     disposicion: float = 0.0
+    atraccion: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +142,8 @@ class CondicionTransicion:
     afecto_min: Optional[float] = None
     familiaridad_min: Optional[float] = None
     tension_max: Optional[float] = None
-    # TODO: añadir condición sobre número mínimo de interacciones cuando
-    # el modelo registre ese contador.
+    tension_min: Optional[float] = None
+    atraccion_min: Optional[float] = None
 
 
 def condicion_cumplida(relacion: Relacion, condicion: CondicionTransicion) -> bool:
@@ -157,6 +158,10 @@ def condicion_cumplida(relacion: Relacion, condicion: CondicionTransicion) -> bo
     if condicion.familiaridad_min is not None and relacion.familiaridad < condicion.familiaridad_min:
         return False
     if condicion.tension_max is not None and relacion.tension > condicion.tension_max:
+        return False
+    if condicion.tension_min is not None and relacion.tension < condicion.tension_min:
+        return False
+    if condicion.atraccion_min is not None and relacion.atraccion < condicion.atraccion_min:
         return False
     return True
 
@@ -177,14 +182,20 @@ def evaluar_transicion(
         "impulso"  — las condiciones se cumplen con margen suficiente para avance automático
         "permiso"  — las condiciones se cumplen pero se necesita un evento significativo
         None       — las condiciones no se cumplen
+
+    Si la transición está en `cfg.transiciones_solo_permiso`, nunca devuelve "impulso" —
+    fuerza siempre "permiso" aunque se cumplan las condiciones con margen amplio.
     """
-    if relacion.etapa != condicion.desde_id:
+    if relacion.etapa_id != condicion.desde_id:
         return None
     if transicion.desde_id != condicion.desde_id or transicion.hasta_id != condicion.hasta_id:
         return None
     if not condicion_cumplida(relacion, condicion):
         return None
 
+    clave = (transicion.desde_id, transicion.hasta_id)
+    if clave in cfg.transiciones_solo_permiso:
+        return "permiso"
     if _cumple_con_margen(relacion, condicion, UMBRAL_IMPULSO_AUTOMATICO):
         return "impulso"
     return "permiso"
@@ -210,6 +221,9 @@ def _cumple_con_margen(
     if condicion.tension_max is not None:
         if relacion.tension > condicion.tension_max - margen + _EPSILON:
             return False
+    if condicion.tension_min is not None:
+        if relacion.tension < condicion.tension_min + margen - _EPSILON:
+            return False
     return True
 
 
@@ -227,7 +241,7 @@ def buscar_transicion_elegible(
     indice_condiciones = {(c.desde_id, c.hasta_id): c for c in condiciones}
 
     for transicion in transiciones:
-        if transicion.desde_id != relacion.etapa:
+        if transicion.desde_id != relacion.etapa_id:
             continue
         clave = (transicion.desde_id, transicion.hasta_id)
         condicion = indice_condiciones.get(clave)
@@ -372,6 +386,7 @@ def aplicar_deltas_turno(
     nuevo_tension = _recortar(relacion.tension + deltas.tension + reduccion_por_afecto)
 
     nuevo_disposicion,  cambio_disposicion = _aplicar_cambio(relacion.disposicion,   deltas.disposicion,  cap)
+    nuevo_atraccion,    cambio_atraccion   = _aplicar_cambio(relacion.atraccion,      deltas.atraccion,    cap)
 
     return replace(
         relacion,
@@ -383,6 +398,8 @@ def aplicar_deltas_turno(
         tension=nuevo_tension,
         disposicion=nuevo_disposicion,
         disposicion_delta=_actualizar_ema(relacion.disposicion_delta, cambio_disposicion),
+        atraccion=nuevo_atraccion,
+        atraccion_delta=_actualizar_ema(relacion.atraccion_delta, cambio_atraccion),
     )
 
 

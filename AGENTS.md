@@ -4,42 +4,7 @@
 
 ## Mapa del repositorio
 
-```
-novia_AI/
-├── dominio/                   # Lógica pura (sin dependencias externas)
-│   ├── modelos.py             # Dataclasses de todas las entidades
-│   ├── configuracion.py       # Singleton que carga data/configuracion.json
-│   ├── emociones.py           # Espacio de Russell, decaimiento, Brechas 1/2/3
-│   ├── relacion.py            # Transiciones de etapa, métricas, interes_actual
-│   ├── confianza.py           # confianza_final, resolución de duplicados en perfil
-│   ├── recuerdos.py           # Filtro de vigencia, relevancia_activa, pipeline de recuperación
-│   └── embedding.py           # ServicioEmbedding (similitud coseno; embeddings = fase 2)
-│
-├── aplicacion/                # Casos de uso (orquesta dominio + repositorios + LLM)
-│   ├── gestor_turno.py        # Caso de uso principal: procesar un turno de conversación
-│   ├── gestor_contexto.py     # Construye el payload que recibe el LLM
-│   └── cliente_llm.py         # Abstracción de proveedor (OpenAI/Gemini/Stub)
-│
-├── repositorios/              # Capa de persistencia
-│   ├── interfaces.py          # Protocols por entidad
-│   └── json/                  # Implementación fase 1: JSON en disco
-│       └── factoria.py        # Ensambla el objeto Repositorios
-│
-├── interfaz/                  # TUI con Textual
-│   ├── app.py
-│   ├── pantallas/chat.py
-│   └── widgets/
-│
-├── data/
-│   ├── configuracion.json     # TODOS los parámetros numéricos del sistema
-│   └── catalogos/             # Emociones, etapas, transiciones, MBTI, etc.
-│
-└── documentacion/
-    ├── modelo_datos_v3.md          # Esquema de entidades y campos
-    ├── logica_interna.md           # Decisiones de comportamiento y fórmulas
-    ├── arquitectura_v3.md          # Capas, flujo de un turno, mapa de archivos
-    └── plan_similitud_semantica.md # Hoja de ruta para embeddings (fase 2)
-```
+Ver `documentacion/arquitectura_v3.md` para el mapa completo de capas, módulos, flujo de arranque y flujo de un turno.
 
 ---
 
@@ -63,7 +28,7 @@ Antes de modificar cualquier lógica existente, consultar:
 - La capa de dominio (`dominio/`) no importa nada de persistencia ni de interfaz.
 - La capa de interfaz (`interfaz/`) solo llama a la capa de aplicación; nunca accede a dominio ni repositorios directamente.
 - Todos los parámetros numéricos se leen de `data/configuracion.json` vía `dominio/configuracion.py`. No hardcodear ningún valor de configuración en el código.
-- Los campos reservados para fase 2 (`embedding` en `Recuerdo`) deben existir en el esquema con valor `None`; no omitirlos, no implementar su lógica aún.
+- El campo `embedding` en `Recuerdo` existe con valor `None` en recuerdos sin vectorizar; no omitirlo.
 - Las transiciones de tipo `ruptura` son irreversibles; no implementar rollback para ellas.
 
 ## Reglas de estilo

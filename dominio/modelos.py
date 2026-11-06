@@ -37,6 +37,20 @@ class Temperamento:
 
 
 @dataclass
+class TipoAtraccion:
+    codigo: str
+    nombre: str
+    descripcion: str
+
+
+@dataclass
+class EstiloApego:
+    codigo: str
+    nombre: str
+    descripcion: str
+
+
+@dataclass
 class Emocion:
     """
     Entrada del catálogo de emociones en el espacio de Russell.
@@ -111,6 +125,9 @@ class Personaje:
     eneagrama_id: str
     temperamento_id: str
     temperamento_secundario_id: Optional[str] = None
+    tipo_atraccion_id: Optional[str] = None   # FK -> TipoAtraccion.codigo
+    estilo_apego_id: Optional[str] = None     # FK -> EstiloApego.codigo
+    matiz_atraccion: Optional[str] = None     # texto libre, 1-2 frases
 
 
 @dataclass
@@ -124,15 +141,17 @@ class Relacion:
     num: int
     personaje_id: int
     usuario_id: int
-    etapa: str              # FK -> EtapaRelacion.codigo
+    etapa_id: str           # FK -> EtapaRelacion.codigo
     confianza: float        # [0.0, 1.0]
     confianza_delta: float  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
     afecto: float           # [0.0, 1.0]
     afecto_delta: float     # [-1.0, 1.0] — tasa de cambio reciente (EMA)
     familiaridad: float     # [0.0, 1.0]
     tension: float          # [0.0, 1.0]
-    disposicion: float      # [0.0, 1.0] — tendencia base a buscar contacto
+    disposicion: float        # [0.0, 1.0] — tendencia base a buscar contacto
     disposicion_delta: float  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
+    atraccion: float = 0.0    # [0.0, 1.0] — interés romántico del personaje hacia este usuario
+    atraccion_delta: float = 0.0  # [-1.0, 1.0] — tasa de cambio reciente (EMA)
     instrucciones_llm: Optional[str] = None  # instrucciones de estilo/comportamiento para el LLM
 
 
@@ -153,7 +172,7 @@ class Estado:
     estado_animo_intensidad: float  # [0.0, 1.0]
     sentimiento_id: str             # FK -> Emocion.codigo, capa "sentimiento"
     sentimiento_intensidad: float   # [0.0, 1.0]
-    ultima_interaccion: datetime
+    ult_interaccion: datetime
 
 
 @dataclass
@@ -200,9 +219,9 @@ class Recuerdo:
     Se inicializa desde importancia y decae con el tiempo; se recupera (boost) cada vez
     que el recuerdo es seleccionado en una conversación. Su techo natural es `importancia`.
 
-    `ultima_recuperacion` registra cuándo fue usado por última vez para calcular el decaimiento.
+    `ult_recuperacion` registra cuándo fue usado por última vez para calcular el decaimiento.
 
-    `mensaje_origen_num` identifica el mensaje que originó el recuerdo. Es None para
+    `mensaje_origen_id` identifica el mensaje que originó el recuerdo. Es None para
     recuerdos antiguos o creados fuera de una conversación concreta.
     """
     num: int
@@ -213,14 +232,13 @@ class Recuerdo:
     origen: str                                     # "sistema" | "llm"
     importancia: float                              # [0.0, 1.0]
     fecha_creacion: datetime
-    ultima_relevancia: datetime
     emocion_asociada_id: str                        # FK -> Emocion.codigo; "neutro" si sin carga
     emocion_asociada_intensidad: float              # [0.0, 1.0]; 0.0 si neutro
     relevancia_activa: float = 0.0                  # [0.0, 1.0] — decae y se recupera; techo = importancia
     vigencia: Optional[datetime] = None             # None = permanente; fecha = caduca
     evento_id: Optional[int] = None                 # FK -> Evento.num
-    mensaje_origen_num: Optional[int] = None        # FK -> Mensaje.num
-    ultima_recuperacion: Optional[datetime] = None  # cuándo fue usado por última vez
+    mensaje_origen_id: Optional[int] = None         # FK -> Mensaje.num
+    ult_recuperacion: Optional[datetime] = None     # cuándo fue usado por última vez
     embedding: Optional[list[float]] = None         # NULL en MVP — fase 2
 
 
@@ -242,7 +260,7 @@ class Evento:
     """
     num: int
     relacion_id: int
-    tipo: str             # FK -> TipoEvento.codigo
+    tipo_id: str          # FK -> TipoEvento.codigo
     descripcion: str
     fecha: datetime
     impacto: float        # [-1.0, 1.0]

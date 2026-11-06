@@ -21,7 +21,7 @@ from dominio.modelos import Estado, Relacion
 ETAPA_INICIAL: str = "desconocidos"
 
 RELACION_VALORES_INICIALES: dict = dict(
-    etapa=ETAPA_INICIAL,
+    etapa_id=ETAPA_INICIAL,
     confianza=0.05,
     confianza_delta=0.0,
     afecto=0.05,
@@ -82,6 +82,6 @@ def nuevo_estado(relacion_id: int, ahora: datetime | None = None) -> Estado:
     """
     return Estado(
         relacion_id=relacion_id,
-        ultima_interaccion=ahora or datetime.now(),
+        ult_interaccion=ahora or datetime.now(),
         **ESTADO_VALORES_INICIALES,
     )

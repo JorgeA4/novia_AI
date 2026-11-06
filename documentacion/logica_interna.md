@@ -127,7 +127,7 @@ La clave única de un dato de perfil es la tripleta `(relacion_id, sujeto, clave
 
 ## Campos `_delta` en RELACION
 
-`confianza_delta`, `afecto_delta` y `disposicion_delta` capturan la tasa de cambio reciente como EMA:
+`confianza_delta`, `afecto_delta`, `disposicion_delta` y `atraccion_delta` capturan la tasa de cambio reciente como EMA:
 
 ```
 delta_nuevo = delta_anterior × α + cambio_real × (1 − α)
@@ -136,6 +136,8 @@ delta_nuevo = delta_anterior × α + cambio_real × (1 − α)
 `α` se lee de config (`relacion.ema_alpha`). El delta no decae con el tiempo — solo cambia cuando hay un evento que modifica la métrica.
 
 `familiaridad` y `tension` no tienen `_delta`: `familiaridad` en la práctica solo sube, y `tension` ya tiene carácter direccional implícito en su valor.
+
+`atraccion` y `atraccion_delta` siguen el mismo mecanismo que `afecto` — aplican cap y resistencia en extremos. Ver sección "Atracción romántica" más abajo.
 
 ---
 
@@ -195,11 +197,58 @@ Tipos:
 - `retroceso` — deterioro recuperable
 - `ruptura` — irreversible
 
-Las condiciones de umbral se evalúan sobre los campos de `RELACION`. El modo de activación:
+El grafo de avance romántico es:
+```
+desconocidos → conocidos → amigos → amigos_cercanos → pareja
+```
+La etapa `interes_romantico` fue eliminada. El interés romántico se modela ahora como la métrica continua `atraccion` en `RELACION`, no como una etapa intermedia.
+
+Las condiciones de umbral de cada transición (`confianza_min`, `afecto_min`, `familiaridad_min`, `tension_max`, `atraccion_min`) se definen en `data/configuracion.json` bajo la clave `transiciones_condiciones` y se leen en `dominio/configuracion.py` como `cfg.transiciones_condiciones`. Son editables sin tocar código.
+
+La transición `amigos_cercanos → pareja` requiere adicionalmente `atraccion >= atraccion_min` (0.60 por defecto).
+
+El modo de activación:
 - **Impulso automático** — condiciones superadas con margen suficiente (`umbral_impulso_automatico` en config)
 - **Permiso** — condiciones cumplidas pero se necesita un momento decisivo (el sistema hace una llamada auxiliar al LLM para verificarlo)
 
+**Transiciones solo-permiso:** algunas transiciones nunca se activan por impulso automático, independientemente de los umbrales. Se listan en `data/configuracion.json` bajo `transiciones_solo_permiso`. Actualmente: `amigos_cercanos → pareja`. El razonamiento es que stats altos solos no bastan para que alguien decida ser pareja de otra persona — siempre se necesita un momento decisivo explícito.
+
 Al avanzar de etapa, el sentimiento se actualiza: el sistema asigna el sentimiento correspondiente a la nueva etapa y suma `delta_sentimiento_al_avanzar` (config) a la intensidad vigente.
+
+---
+
+## Atracción romántica
+
+`atraccion` en `RELACION` representa el grado de interés romántico que el personaje siente por este usuario en esta relación concreta. Rango `[0.0, 1.0]`. Valor `0.0` cuando el personaje no tiene perfil de atracción definido.
+
+### Semántica para el LLM
+
+En cada turno el LLM devuelve `atraccion` como delta `[-0.3, +0.3]`, con el mismo significado que `afecto`:
+- `+0.3` — el usuario mostró exactamente el tipo de cualidad que atrae a este personaje
+- `0.0` — el turno fue neutral respecto a la atracción
+- `-0.3` — lo opuesto a lo que atrae (no necesariamente repulsión — puede ser simple indiferencia)
+
+Si el personaje no tiene `tipo_atraccion_id` ni `estilo_apego_id` definidos, el LLM devuelve siempre `0.0` y el campo no se actualiza.
+
+### Perfil de atracción del personaje
+
+Tres campos opcionales en `PERSONAJE` configuran cómo crece la atracción:
+
+| campo               | tipo     | semántica                                                            |
+|---------------------|----------|----------------------------------------------------------------------|
+| `tipo_atraccion_id` | FK       | qué dimensión del comportamiento del usuario activa la atracción     |
+| `estilo_apego_id`   | FK       | cómo la dinámica de la relación modula el desarrollo de la atracción |
+| `matiz_atraccion`   | texto    | matiz libre de 1-2 frases para afinar la guía al LLM                |
+
+Si los tres son `None`, el sistema no envía ninguna guía de atracción al LLM.
+
+### `atraccion` como señal narrativa
+
+El valor de `atraccion` que el LLM recibe en el bloque de relación actúa también como señal narrativa: un valor alto justifica nerviosismo, detalles especiales, lenguaje más cercano — incluso si la etapa formal es solo `amigos_cercanos`.
+
+### Condición de entrada a `pareja`
+
+La transición `amigos_cercanos → pareja` requiere `atraccion >= atraccion_min` (0.60 por defecto, configurable en `transiciones_condiciones`). `atraccion` es condición de **entrada**, no de permanencia: una vez que la relación es `pareja`, bajar `atraccion` no fuerza retroceso automático.
 
 ---
 
@@ -321,6 +370,58 @@ Campos con conjunto cerrado de valores modelados como enums en el código, sin c
 **CONFLICTO — `estado`:** `"activo"` · `"escalado"` · `"latente"` · `"resuelto"`
 
 **TRANSICION_ETAPA — `tipo`:** `"avance"` · `"retroceso"` · `"ruptura"`
+
+---
+
+## Búsqueda semántica de recuerdos
+
+El módulo `dominio/embedding.py` encapsula el modelo de embeddings. El modelo se carga de forma **lazy** — solo al primer uso, sin penalizar el arranque de la app.
+
+**Modelo:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+- 384 dimensiones, multilingüe (español nativo), < 120 MB, 100 % local.
+- Configurado en `cfg.embedding.modelo`.
+
+### Cómo se generan los embeddings
+
+Al persistir un recuerdo nuevo (`gestor_turno.py`, paso 9b), el sistema calcula su embedding inmediatamente:
+
+```
+embedding = ServicioEmbedding.codificar(recuerdo.contenido)
+```
+
+El vector se guarda en `Recuerdo.embedding` (`list[float]` de 384 elementos). En Fase 2 se almacenará como `vector(384)` en PostgreSQL con índice HNSW. En Fase 1 (JSON) se serializa como lista de floats.
+
+Los recuerdos anteriores a la activación de embeddings tienen `embedding = None`. Se tratan con similitud `0.0` — degradación graceful: siguen participando en el ranking por sus señales intrínsecas.
+
+### Pipeline de selección (implementado en `dominio/recuerdos.py`)
+
+El mensaje del usuario se divide en fragmentos por puntuación y saltos de línea (`dividir_en_fragmentos`). Se vectoriza cada fragmento por separado.
+
+**Filtro semántico (Fase 1 del pipeline):**
+Para cada recuerdo con embedding, se calcula la similitud coseno máxima entre sus fragmentos y el embedding del recuerdo:
+
+```
+sim_max = max(similitud_coseno(frag, recuerdo.embedding) for frag in fragmentos_msg)
+```
+
+Solo pasan los recuerdos con `sim_max >= cfg.embedding.umbral_similitud_minima` (defecto: `0.25`). Los recuerdos sin embedding pasan con `sim_max = 0.0` solo si el umbral es `0.0`.
+
+**Ranking por señales intrínsecas (Fase 2 del pipeline):**
+Los candidatos que pasaron el filtro se ordenan por:
+
+```
+score = peso_importancia × importancia
+      + peso_relevancia  × relevancia_activa
+      + peso_emocion     × emocion_asociada_intensidad
+```
+
+Pesos por defecto: `0.45 / 0.35 / 0.20` (config `embedding.peso_*`). Se devuelven los `k` primeros (`cfg.embedding.top_k_semantico`, defecto: `5`).
+
+La similitud coseno actúa como **filtro**, no como componente del score de ranking. Esto evita que recuerdos con embedding alto pero poca importancia desplacen a recuerdos intrínsecamente relevantes.
+
+### Script de retroalimentación
+
+`scripts/recalcular_embeddings.py` popula el campo `embedding` en recuerdos existentes que aún tienen `None`. Es idempotente: omite los que ya tienen embedding. Se puede ejecutar por relación o para todas a la vez.
 
 ---
 

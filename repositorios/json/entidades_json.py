@@ -54,6 +54,9 @@ def _dict_a_personaje(d: dict) -> Personaje:
         eneagrama_id=d["eneagrama_id"],
         temperamento_id=d["temperamento_id"],
         temperamento_secundario_id=d.get("temperamento_secundario_id") or None,
+        tipo_atraccion_id=d.get("tipo_atraccion_id") or None,
+        estilo_apego_id=d.get("estilo_apego_id") or None,
+        matiz_atraccion=d.get("matiz_atraccion") or None,
     )
 
 
@@ -120,7 +123,7 @@ def _dict_a_relacion(d: dict) -> Relacion:
         num=d["num"],
         personaje_id=d["personaje_id"],
         usuario_id=d["usuario_id"],
-        etapa=d["etapa"],
+        etapa_id=d["etapa_id"],
         confianza=d["confianza"],
         confianza_delta=d.get("confianza_delta", 0.0),
         afecto=d["afecto"],
@@ -129,6 +132,8 @@ def _dict_a_relacion(d: dict) -> Relacion:
         tension=d["tension"],
         disposicion=d.get("disposicion", 0.5),
         disposicion_delta=d.get("disposicion_delta", 0.0),
+        atraccion=d.get("atraccion", 0.0),
+        atraccion_delta=d.get("atraccion_delta", 0.0),
         instrucciones_llm=d.get("instrucciones_llm") or None,
     )
 
@@ -151,7 +156,7 @@ class EstadoJson:
         registros = leer_json(self._ruta)
         registros = [r for r in registros if r["relacion_id"] != estado.relacion_id]
         d = asdict(estado)
-        d["ultima_interaccion"] = estado.ultima_interaccion.isoformat()
+        d["ult_interaccion"] = estado.ult_interaccion.isoformat()
         registros.append(d)
         escribir_json(self._ruta, registros)
 
@@ -170,5 +175,5 @@ def _dict_a_estado(d: dict) -> Estado:
         estado_animo_intensidad=d["estado_animo_intensidad"],
         sentimiento_id=d["sentimiento_id"],
         sentimiento_intensidad=d["sentimiento_intensidad"],
-        ultima_interaccion=parsear_datetime(d["ultima_interaccion"]),
+        ult_interaccion=parsear_datetime(d["ult_interaccion"]),
     )

@@ -117,6 +117,8 @@ def _condiciones_desde_cfg() -> list[CondicionTransicion]:
             afecto_min=c.afecto_min,
             familiaridad_min=c.familiaridad_min,
             tension_max=c.tension_max,
+            tension_min=c.tension_min,
+            atraccion_min=c.atraccion_min,
         )
         for c in cfg.transiciones_condiciones
     ]
@@ -177,7 +179,7 @@ class GestorTurno:
         ))
 
         # --- 4. Decaimiento emocional + familiar + tensión (incluye deriva del sentimiento — Brecha 3) ---
-        segundos = (ahora - estado.ultima_interaccion).total_seconds()
+        segundos = (ahora - estado.ult_interaccion).total_seconds()
         if segundos > 0:
             estado = decaer_estado(estado, segundos, catalogo_emociones)
             relacion = decaer_familiaridad(relacion, segundos)
@@ -188,6 +190,8 @@ class GestorTurno:
         mbtis = {m.codigo: m for m in repos.catalogos.obtener_mbti()}
         eneagramas = {e.codigo: e for e in repos.catalogos.obtener_eneagramas()}
         temperamentos = {t.codigo: t for t in repos.catalogos.obtener_temperamentos()}
+        tipos_atraccion = {t.codigo: t for t in repos.catalogos.obtener_tipos_atraccion()}
+        estilos_apego = {e.codigo: e for e in repos.catalogos.obtener_estilos_apego()}
 
         recuerdos_todos = filtrar_vigentes(repos.recuerdo.listar_por_relacion(relacion_id))
         mensajes_contexto = mensajes_previos[-cfg.contexto_llm.limite_historial:]
@@ -215,6 +219,16 @@ class GestorTurno:
             if personaje.temperamento_secundario_id is not None
             else None
         )
+        tipo_atraccion = (
+            tipos_atraccion.get(personaje.tipo_atraccion_id)
+            if personaje.tipo_atraccion_id is not None
+            else None
+        )
+        estilo_apego = (
+            estilos_apego.get(personaje.estilo_apego_id)
+            if personaje.estilo_apego_id is not None
+            else None
+        )
         catalogo_emociones_idx = {e.codigo: e for e in catalogo_emociones}
         interes = calcular_interes_actual(relacion, estado, catalogo_emociones_idx, ahora)
 
@@ -222,7 +236,7 @@ class GestorTurno:
             personaje=personaje,
             relacion=relacion,
             estado=estado,
-            etapa=etapas[relacion.etapa],
+            etapa=etapas[relacion.etapa_id],
             mbti=mbtis[personaje.mbti_id],
             eneagrama=eneagramas[personaje.eneagrama_id],
             temperamento=temperamentos[personaje.temperamento_id],
@@ -234,6 +248,8 @@ class GestorTurno:
             temperamento_secundario=temp_secundario,
             conflictos_activos=conflictos_activos,
             interes_actual=interes,
+            tipo_atraccion=tipo_atraccion,
+            estilo_apego=estilo_apego,
         )
         historial = construir_historial(mensajes_previos)
         payload = construir_payload(sistema, historial, texto_usuario)
@@ -289,7 +305,7 @@ class GestorTurno:
                 estado_animo_intensidad=animo_int_final,
             )
 
-        estado = replace(estado, ultima_interaccion=ahora)
+        estado = replace(estado, ult_interaccion=ahora)
         repos.estado.guardar(estado)
 
         # --- 9a. Persistir deltas de relación ---
@@ -310,6 +326,7 @@ class GestorTurno:
             tension=_extraer_tension(),
             # disposicion se deriva de las tendencias de afecto y confianza
             # tras aplicar los deltas anteriores — se calcula abajo
+            atraccion=_extraer_delta("atraccion"),
         )
 
         # Aplicar primero los deltas del LLM para que afecto_delta y confianza_delta
@@ -323,7 +340,7 @@ class GestorTurno:
         repos.evento.guardar(Evento(
             num=0,
             relacion_id=relacion_id,
-            tipo="interaccion",
+            tipo_id="interaccion",
             descripcion=(
                 f"Interacción: afecto={deltas.afecto:+.2f} "
                 f"conf={deltas.confianza:+.2f} "
@@ -367,11 +384,10 @@ class GestorTurno:
                     origen="llm",
                     importancia=importancia,
                     fecha_creacion=ahora,
-                    ultima_relevancia=ahora,
                     emocion_asociada_id=emocion_id,
                     emocion_asociada_intensidad=emocion_int,
                     vigencia=vigencia,
-                    mensaje_origen_num=mensaje_usuario.num,
+                    mensaje_origen_id=mensaje_usuario.num,
                     embedding=embedding_recuerdo,
                 )
                 nuevo_recuerdo = replace(
@@ -451,22 +467,23 @@ class GestorTurno:
             )
 
             if debe_avanzar:
-                etapa_anterior = relacion.etapa
+                etapa_anterior = relacion.etapa_id
                 etapa_nueva = transicion.hasta_id
 
-                relacion = replace(relacion, etapa=etapa_nueva)
+                relacion = replace(relacion, etapa_id=etapa_nueva)
                 repos.relacion.guardar(relacion)
 
+                signo_impacto = 1.0 if transicion.tipo == "avance" else -1.0
                 repos.evento.guardar(Evento(
                     num=0,
                     relacion_id=relacion_id,
-                    tipo="cambio_etapa",
+                    tipo_id="cambio_etapa",
                     descripcion=(
                         f"Transición {'automática' if modo == 'impulso' else 'por momento decisivo'}: "
                         f"{etapa_anterior} → {etapa_nueva}"
                     ),
                     fecha=ahora,
-                    impacto=cfg.transicion_etapa.impacto_evento,
+                    impacto=signo_impacto * cfg.transicion_etapa.impacto_evento,
                     resuelto=True,
                     etapa_desde_id=etapa_anterior,
                     etapa_hasta_id=etapa_nueva,
@@ -573,7 +590,7 @@ def _gestionar_conflictos(
                 evento = Evento(
                     num=0,
                     relacion_id=relacion_id,
-                    tipo="conflicto",
+                    tipo_id="conflicto",
                     descripcion=causa,
                     fecha=ahora,
                     impacto=-tension_delta,
@@ -583,7 +600,7 @@ def _gestionar_conflictos(
                 # Obtener el num asignado buscando el último evento de tipo conflicto
                 eventos = repos.evento.listar_por_relacion(relacion_id)
                 evento_guardado = next(
-                    (e for e in reversed(eventos) if e.tipo == "conflicto" and e.descripcion == causa),
+                    (e for e in reversed(eventos) if e.tipo_id == "conflicto" and e.descripcion == causa),
                     None,
                 )
                 if evento_guardado is not None:
@@ -620,7 +637,7 @@ def _gestionar_conflictos(
         evento = Evento(
             num=0,
             relacion_id=relacion_id,
-            tipo="conflicto",
+            tipo_id="conflicto",
             descripcion=causa_auto,
             fecha=ahora,
             impacto=-tension_delta,
@@ -629,7 +646,7 @@ def _gestionar_conflictos(
         repos.evento.guardar(evento)
         eventos = repos.evento.listar_por_relacion(relacion_id)
         evento_guardado = next(
-            (e for e in reversed(eventos) if e.tipo == "conflicto" and e.descripcion == causa_auto),
+            (e for e in reversed(eventos) if e.tipo_id == "conflicto" and e.descripcion == causa_auto),
             None,
         )
         if evento_guardado is not None:
@@ -750,12 +767,11 @@ def _es_momento_decisivo(
     Devuelve False ante cualquier error para no forzar transiciones no deseadas.
     """
     _DESCRIPCIONES_ETAPA = {
-        "conocidos":         "pasar de extraños a personas que se conocen",
-        "amigos":            "pasar a ser amigos",
-        "amigos_cercanos":   "pasar a ser amigos cercanos con confianza real",
-        "interes_romantico": "surgir un interés romántico mutuo explícito",
-        "pareja":            "decidir ser pareja, con una declaración o compromiso claro",
-        "distanciamiento":   "distanciarse o alejarse emocionalmente",
+        "conocidos":       "pasar de extraños a personas que se conocen",
+        "amigos":          "pasar a ser amigos",
+        "amigos_cercanos": "pasar a ser amigos cercanos con confianza real",
+        "pareja":          "decidir ser pareja, con atracción real y una declaración o compromiso claro",
+        "distanciamiento": "distanciarse o alejarse emocionalmente",
     }
     descripcion = _DESCRIPCIONES_ETAPA.get(etapa_destino, f"avanzar a la etapa '{etapa_destino}'")
 

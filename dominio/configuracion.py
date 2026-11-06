@@ -115,6 +115,8 @@ class ConfigTransicionCondicion:
     afecto_min: Optional[float] = None
     familiaridad_min: Optional[float] = None
     tension_max: Optional[float] = None
+    tension_min: Optional[float] = None
+    atraccion_min: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +161,7 @@ class Configuracion:
     recuerdos: ConfigRecuerdos
     transicion_etapa: ConfigTransicionEtapa
     transiciones_condiciones: tuple[ConfigTransicionCondicion, ...]
+    transiciones_solo_permiso: frozenset[tuple[str, str]]
     conflictos: ConfigConflictos
     contexto_llm: ConfigContextoLlm
     embedding: ConfigEmbedding
@@ -184,6 +187,9 @@ def _cargar_configuracion() -> Configuracion:
         transicion_etapa=ConfigTransicionEtapa(**d["transicion_etapa"]),
         transiciones_condiciones=tuple(
             ConfigTransicionCondicion(**c) for c in d["transiciones_condiciones"]
+        ),
+        transiciones_solo_permiso=frozenset(
+            (e["desde_id"], e["hasta_id"]) for e in d.get("transiciones_solo_permiso", [])
         ),
         conflictos=ConfigConflictos(**d["conflictos"]),
         contexto_llm=ConfigContextoLlm(**d["contexto_llm"]),

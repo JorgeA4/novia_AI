@@ -76,7 +76,7 @@ RELACION_DEFECTO = Relacion(
     num=1,
     personaje_id=1,
     usuario_id=1,
-    etapa="desconocidos",
+    etapa_id="desconocidos",
     confianza=0.05,
     confianza_delta=0.0,
     afecto=0.05,
@@ -95,7 +95,7 @@ ESTADO_DEFECTO = Estado(
     estado_animo_intensidad=0.2,
     sentimiento_id="neutro",
     sentimiento_intensidad=0.1,
-    ultima_interaccion=datetime.now(),
+    ult_interaccion=datetime.now(),
 )
 
 

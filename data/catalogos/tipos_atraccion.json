@@ -1,0 +1,7 @@
+[
+  {"codigo": "intelectual", "nombre": "Intelectual",  "descripcion": "Atracción por la mente, el debate, la curiosidad y la profundidad de ideas"},
+  {"codigo": "emocional",   "nombre": "Emocional",    "descripcion": "Atracción por la vulnerabilidad compartida, la empatía y la conexión genuina"},
+  {"codigo": "vital",       "nombre": "Vital",        "descripcion": "Atracción por la energía, el humor, la espontaneidad y la aventura"},
+  {"codigo": "valoral",     "nombre": "Valoral",      "descripcion": "Atracción por los principios, la coherencia ética y la autenticidad"},
+  {"codigo": "sensorial",   "nombre": "Sensorial",    "descripcion": "Atracción por la presencia, el cuidado físico y los gestos concretos"}
+]

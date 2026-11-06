@@ -12,9 +12,11 @@ from pathlib import Path
 from dominio.modelos import (
     Emocion,
     Eneagrama,
+    EstiloApego,
     EtapaRelacion,
     Mbti,
     Temperamento,
+    TipoAtraccion,
     TipoEvento,
     TransicionEtapa,
 )
@@ -31,6 +33,8 @@ class CatalogosJson:
         self._mbti: list[Mbti] | None = None
         self._eneagramas: list[Eneagrama] | None = None
         self._temperamentos: list[Temperamento] | None = None
+        self._tipos_atraccion: list[TipoAtraccion] | None = None
+        self._estilos_apego: list[EstiloApego] | None = None
 
     # --- Emocion ---
 
@@ -140,3 +144,33 @@ class CatalogosJson:
                 for d in datos
             ]
         return self._temperamentos
+
+    # --- TipoAtraccion ---
+
+    def obtener_tipos_atraccion(self) -> list[TipoAtraccion]:
+        if self._tipos_atraccion is None:
+            datos = leer_json(self._dir / "tipos_atraccion.json")
+            self._tipos_atraccion = [
+                TipoAtraccion(
+                    codigo=d["codigo"],
+                    nombre=d["nombre"],
+                    descripcion=d.get("descripcion", ""),
+                )
+                for d in datos
+            ]
+        return self._tipos_atraccion
+
+    # --- EstiloApego ---
+
+    def obtener_estilos_apego(self) -> list[EstiloApego]:
+        if self._estilos_apego is None:
+            datos = leer_json(self._dir / "estilos_apego.json")
+            self._estilos_apego = [
+                EstiloApego(
+                    codigo=d["codigo"],
+                    nombre=d["nombre"],
+                    descripcion=d.get("descripcion", ""),
+                )
+                for d in datos
+            ]
+        return self._estilos_apego

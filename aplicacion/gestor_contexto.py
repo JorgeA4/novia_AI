@@ -19,6 +19,7 @@ from dominio.modelos import (
     Conflicto,
     Emocion,
     Eneagrama,
+    EstiloApego,
     EtapaRelacion,
     Mbti,
     Mensaje,
@@ -28,6 +29,7 @@ from dominio.modelos import (
     Relacion,
     Estado,
     Temperamento,
+    TipoAtraccion,
 )
 from dominio.confianza import confianza_final_de
 
@@ -48,6 +50,8 @@ def construir_sistema(
     temperamento_secundario: Temperamento | None = None,
     conflictos_activos: list[Conflicto] | None = None,
     interes_actual: float | None = None,
+    tipo_atraccion: TipoAtraccion | None = None,
+    estilo_apego: EstiloApego | None = None,
 ) -> str:
     """
     Construye el mensaje de sistema que define al personaje para el LLM.
@@ -78,6 +82,17 @@ def construir_sistema(
         f"Perfil psicológico: {mbti.siglas} · {eneagrama.siglas} · {nombre_temperamento}"
     )
 
+    # --- Perfil de atracción (solo si al menos un campo está definido) ---
+    lineas_atraccion: list[str] = []
+    if tipo_atraccion is not None:
+        lineas_atraccion.append(f"  Tipo de atracción: {tipo_atraccion.nombre} — {tipo_atraccion.descripcion}")
+    if estilo_apego is not None:
+        lineas_atraccion.append(f"  Estilo de apego: {estilo_apego.nombre} — {estilo_apego.descripcion}")
+    if personaje.matiz_atraccion:
+        lineas_atraccion.append(f"  Matiz: {personaje.matiz_atraccion}")
+    if lineas_atraccion:
+        secciones.append("Perfil de atracción romántica:\n" + "\n".join(lineas_atraccion))
+
     # --- Valores y gustos ---
     if personaje.valores:
         secciones.append(f"Valores: {', '.join(personaje.valores)}")
@@ -102,7 +117,7 @@ def construir_sistema(
     linea_metricas = (
         f"métricas  confianza={relacion.confianza:.2f}  afecto={relacion.afecto:.2f}"
         f"  familiaridad={relacion.familiaridad:.2f}  tension={relacion.tension:.2f}"
-        f"  interes_ahora={valor_interes:.2f}"
+        f"  atraccion={relacion.atraccion:.2f}  interes_ahora={valor_interes:.2f}"
     )
     linea_tendencias = (
         ("tendencia " + "  ".join(tendencias)) if tendencias else ""
@@ -189,6 +204,15 @@ def construir_sistema(
     codigos_estado_animo = ", ".join(
         e.codigo for e in catalogo_emociones if e.capa in ("estado_animo", "cualquiera")
     )
+    tiene_perfil_atraccion = (
+        personaje.tipo_atraccion_id is not None or personaje.estilo_apego_id is not None
+    )
+    instruccion_atraccion = (
+        "  atraccion           (float -0.3–0.3) — cuánto resonó este turno con tu perfil de atracción;\n"
+        "    +0.3 = el usuario mostró exactamente lo que te atrae, 0.0 = neutral, -0.3 = lo opuesto.\n"
+    ) if tiene_perfil_atraccion else (
+        "  atraccion           (float) — devuelve siempre 0.0 (no tienes perfil de atracción definido)\n"
+    )
     secciones.append(
         "FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con un único objeto JSON "
         "con exactamente estas claves (sin texto antes ni después):\n\n"
@@ -200,6 +224,7 @@ def construir_sistema(
         "  afecto              (float -1.0–1.0) — cambio en el cariño/apego emocional\n"
         "  confianza           (float -1.0–1.0) — cambio en la confianza y apertura mutua\n"
         "  tension             (float  0.0–1.0) — cambio en la tensión acumulada; SOLO positivo o 0.0\n"
+        + instruccion_atraccion +
         "  conflicto_nuevo     (object | null) — si este turno abre un conflicto nuevo; null si no\n"
         "  conflicto_resuelto  (object | null) — si un conflicto existente se cerró este turno; null si no\n"
         "  recuerdos           (array) — lista de recuerdos a guardar; vacía [] si no hay nada memorable\n"

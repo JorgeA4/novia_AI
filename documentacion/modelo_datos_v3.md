@@ -8,16 +8,20 @@ Atributos constantes de identidad, historia y psicología del personaje.
 
 ### Campos
 
-num             → INT (PK)
-nombre          → STR
-descripcion     → STR
-historia        → STR
-valores         → LIST[STR]
-gustos          → LIST[STR]
-aversiones      → LIST[STR]
-mbti_id         → STR (FK -> MBTI.codigo)
-eneagrama_id    → STR (FK -> ENEAGRAMA.codigo)
-temperamento_id → STR (FK -> TEMPERAMENTO.codigo)
+num                         → INT (PK)
+nombre                      → STR
+descripcion                 → STR
+historia                    → STR
+valores                     → LIST[STR]
+gustos                      → LIST[STR]
+aversiones                  → LIST[STR]
+mbti_id                     → STR (FK -> MBTI.codigo)
+eneagrama_id                → STR (FK -> ENEAGRAMA.codigo)
+temperamento_id             → STR (FK -> TEMPERAMENTO.codigo)
+temperamento_secundario_id  → STR (FK -> TEMPERAMENTO.codigo, opcional)
+tipo_atraccion_id           → STR (FK -> TIPO_ATRACCION.codigo, opcional — None si no definido)
+estilo_apego_id             → STR (FK -> ESTILO_APEGO.codigo, opcional — None si no definido)
+matiz_atraccion             → STR (opcional — texto libre, 1-2 frases que matizan el perfil)
 
 ------------------------------------------------------
 
@@ -54,6 +58,49 @@ Catálogo de los 4 temperamentos clásicos. `descripcion` es solo informativa pa
 codigo      → STR (PK)
 nombre      → STR
 descripcion → STR
+
+------------------------------------------------------
+
+## TIPO_ATRACCION
+
+Catálogo de los tipos de atracción del personaje. Define qué dimensión del comportamiento del usuario resonará con este personaje y activará `delta_atraccion` positivo. `descripcion` es solo informativa para UI y para el LLM.
+
+### Campos
+
+codigo      → STR (PK)
+nombre      → STR
+descripcion → STR
+
+### Entradas
+
+| codigo        | nombre      | descripcion                                                                         |
+|---------------|-------------|--------------------------------------------------------------------------------------|
+| `intelectual` | Intelectual | Atracción por la mente, el debate, la curiosidad y la profundidad de ideas           |
+| `emocional`   | Emocional   | Atracción por la vulnerabilidad compartida, la empatía y la conexión genuina         |
+| `vital`       | Vital       | Atracción por la energía, el humor, la espontaneidad y la aventura                   |
+| `valoral`     | Valoral     | Atracción por los principios, la coherencia ética y la autenticidad                  |
+| `sensorial`   | Sensorial   | Atracción por la presencia, el cuidado físico y los gestos concretos                 |
+
+------------------------------------------------------
+
+## ESTILO_APEGO
+
+Catálogo de los cuatro estilos de apego (Bowlby/Ainsworth). Define cómo la dinámica de la relación modula el desarrollo de la atracción. `descripcion` es solo informativa para UI y para el LLM.
+
+### Campos
+
+codigo      → STR (PK)
+nombre      → STR
+descripcion → STR
+
+### Entradas
+
+| codigo          | nombre        | descripcion                                                                                          |
+|-----------------|---------------|-------------------------------------------------------------------------------------------------------|
+| `seguro`        | Seguro        | Florece por conexión genuina sin condiciones especiales; cómodo con cercanía e independencia          |
+| `ansioso`       | Ansioso       | Necesita atención sostenida y consistencia; la ambigüedad activa el alejamiento                       |
+| `evitativo`     | Evitativo     | La atracción crece cuando se respeta el espacio; la presión o urgencia la bloquea                     |
+| `desorganizado` | Desorganizado | Respuestas contradictorias; mezcla de atracción e incomodidad ante la cercanía                        |
 
 ------------------------------------------------------
 
@@ -105,7 +152,7 @@ estado_animo_id         → STR (FK -> EMOCION.codigo, capa "estado_animo")
 estado_animo_intensidad → FLOAT (0.0 – 1.0)
 sentimiento_id          → STR (FK -> EMOCION.codigo, capa "sentimiento")
 sentimiento_intensidad  → FLOAT (0.0 – 1.0)
-ultima_interaccion      → DATETIME
+ult_interaccion         → DATETIME
 
 ------------------------------------------------------
 
@@ -122,7 +169,7 @@ Los campos `_delta` capturan la tasa de cambio reciente de su métrica asociada 
 num                 → INT (PK)
 personaje_id        → INT (FK -> PERSONAJE.num)
 usuario_id          → INT (FK -> USUARIO.num)
-etapa               → STR (FK -> ETAPA_RELACION.codigo)
+etapa_id            → STR (FK -> ETAPA_RELACION.codigo)
 confianza           → FLOAT (0.0 – 1.0)
 confianza_delta     → FLOAT (-1.0 – 1.0)
 afecto              → FLOAT (0.0 – 1.0)
@@ -131,6 +178,8 @@ familiaridad        → FLOAT (0.0 – 1.0)
 tension             → FLOAT (0.0 – 1.0)
 disposicion         → FLOAT (0.0 – 1.0)
 disposicion_delta   → FLOAT (-1.0 – 1.0)
+atraccion           → FLOAT (0.0 – 1.0)   — interés romántico del personaje hacia este usuario; 0.0 si no hay perfil de atracción definido
+atraccion_delta     → FLOAT (-1.0 – 1.0)  — tasa de cambio reciente (EMA)
 instrucciones_llm   → STR (opcional — None si no hay instrucciones)
 
 ------------------------------------------------------
@@ -198,11 +247,10 @@ importancia                 → FLOAT (0.0 – 1.0)  — propiedad fija; asignad
 emocion_asociada_id         → STR (FK -> EMOCION.codigo)
 emocion_asociada_intensidad → FLOAT (0.0 – 1.0)
 fecha_creacion              → DATETIME
-ultima_relevancia           → DATETIME
 relevancia_activa           → FLOAT (0.0 – 1.0)  — decae con tiempo; boost al recuperar; techo = importancia
 vigencia                    → DATETIME (opcional — None = permanente; si expiró, se descarta)
-mensaje_origen_num          → INT (FK -> MENSAJE.num, opcional)
-ultima_recuperacion         → DATETIME (opcional — None si nunca fue recuperado)
+mensaje_origen_id           → INT (FK -> MENSAJE.num, opcional)
+ult_recuperacion            → DATETIME
 embedding                   → VECTOR(384) (opcional — None en MVP; fase 2: pgvector, índice HNSW)
 
 ### Lógica de `vigencia` por `categoria`
@@ -242,7 +290,7 @@ Hecho objetivo ocurrido en la relación, registrado con impacto medible. Indepen
 
 num              → INT (PK)
 relacion_id      → INT (FK -> RELACION.num)
-tipo             → STR (FK -> TIPO_EVENTO.codigo)
+tipo_id          → STR (FK -> TIPO_EVENTO.codigo)
 descripcion      → STR
 fecha            → DATETIME
 impacto          → FLOAT (-1.0 – 1.0)
@@ -281,6 +329,10 @@ descripcion → STR
 ## TRANSICION_ETAPA
 
 Grafo de transiciones válidas entre etapas. El sistema consulta esta entidad antes de aplicar cualquier cambio de etapa — si no existe el par `(desde_id, hasta_id)`, la transición no está permitida. Las condiciones de umbral para cada transición se definen en la lógica interna.
+
+La etapa `interes_romantico` ha sido eliminada del grafo. El flujo de avance romántico es ahora:
+`desconocidos → conocidos → amigos → amigos_cercanos → pareja`.
+La transición `amigos_cercanos → pareja` requiere `atraccion >= atraccion_min_pareja` además de los umbrales habituales, y nunca puede activarse por impulso automático (solo por momento decisivo).
 
 ### Campos
 

@@ -94,7 +94,7 @@ class EventoJson:
             evento = Evento(
                 num=siguiente_id(registros),
                 relacion_id=evento.relacion_id,
-                tipo=evento.tipo,
+                tipo_id=evento.tipo_id,
                 descripcion=evento.descripcion,
                 fecha=evento.fecha,
                 impacto=evento.impacto,
@@ -125,7 +125,7 @@ def _dict_a_evento(d: dict) -> Evento:
     return Evento(
         num=d["num"],
         relacion_id=d["relacion_id"],
-        tipo=d["tipo"],
+        tipo_id=d["tipo_id"],
         descripcion=d["descripcion"],
         fecha=parsear_datetime(d["fecha"]),
         impacto=d["impacto"],
@@ -254,22 +254,20 @@ class RecuerdoJson:
                 origen=recuerdo.origen,
                 importancia=recuerdo.importancia,
                 fecha_creacion=recuerdo.fecha_creacion,
-                ultima_relevancia=recuerdo.ultima_relevancia,
                 emocion_asociada_id=recuerdo.emocion_asociada_id,
                 emocion_asociada_intensidad=recuerdo.emocion_asociada_intensidad,
                 relevancia_activa=recuerdo.relevancia_activa,
                 vigencia=recuerdo.vigencia,
                 evento_id=recuerdo.evento_id,
-                mensaje_origen_num=recuerdo.mensaje_origen_num,
-                ultima_recuperacion=recuerdo.ultima_recuperacion,
+                mensaje_origen_id=recuerdo.mensaje_origen_id,
+                ult_recuperacion=recuerdo.ult_recuperacion,
                 embedding=recuerdo.embedding,
             )
         registros = [r for r in registros if r["num"] != recuerdo.num]
         d = asdict(recuerdo)
         d["fecha_creacion"] = recuerdo.fecha_creacion.isoformat()
-        d["ultima_relevancia"] = recuerdo.ultima_relevancia.isoformat()
         d["vigencia"] = recuerdo.vigencia.isoformat() if recuerdo.vigencia is not None else None
-        d["ultima_recuperacion"] = recuerdo.ultima_recuperacion.isoformat() if recuerdo.ultima_recuperacion is not None else None
+        d["ult_recuperacion"] = recuerdo.ult_recuperacion.isoformat() if recuerdo.ult_recuperacion is not None else None
         registros.append(d)
         escribir_json(self._ruta, registros)
 
@@ -298,18 +296,17 @@ class RecuerdoJson:
 
 def _dict_a_recuerdo(d: dict) -> Recuerdo:
     vigencia_raw = d.get("vigencia")
-    ultima_recuperacion_raw = d.get("ultima_recuperacion")
+    ult_recuperacion_raw = d.get("ult_recuperacion")
     importancia = d["importancia"]
     return Recuerdo(
         num=d["num"],
         relacion_id=d["relacion_id"],
-        tipo=d["tipo"],
+        tipo=d.get("tipo", "episodico"),
         categoria=d.get("categoria", "hecho_puntual"),
         contenido=d["contenido"],
         origen=d["origen"],
         importancia=importancia,
         fecha_creacion=parsear_datetime(d["fecha_creacion"]),
-        ultima_relevancia=parsear_datetime(d["ultima_relevancia"]),
         emocion_asociada_id=d.get("emocion_asociada_id") or "neutro",
         emocion_asociada_intensidad=d.get("emocion_asociada_intensidad") or 0.0,
         # relevancia_activa: si no existe en el JSON (recuerdos antiguos), se inicializa
@@ -317,8 +314,8 @@ def _dict_a_recuerdo(d: dict) -> Recuerdo:
         relevancia_activa=d.get("relevancia_activa", importancia),
         vigencia=parsear_datetime(vigencia_raw) if vigencia_raw else None,
         evento_id=d.get("evento_id"),
-        mensaje_origen_num=d.get("mensaje_origen_num"),
-        ultima_recuperacion=parsear_datetime(ultima_recuperacion_raw) if ultima_recuperacion_raw else None,
+        mensaje_origen_id=d.get("mensaje_origen_id"),
+        ult_recuperacion=parsear_datetime(ult_recuperacion_raw) if ult_recuperacion_raw else None,
         embedding=d.get("embedding"),
     )
 

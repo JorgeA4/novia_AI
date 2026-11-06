@@ -1,0 +1,6 @@
+[
+  {"codigo": "seguro",        "nombre": "Seguro",        "descripcion": "Florece por conexión genuina sin condiciones especiales; cómodo con cercanía e independencia"},
+  {"codigo": "ansioso",       "nombre": "Ansioso",       "descripcion": "Necesita atención sostenida y consistencia para sentirse seguro; la ambigüedad activa el alejamiento"},
+  {"codigo": "evitativo",     "nombre": "Evitativo",     "descripcion": "La atracción crece cuando se respeta el espacio; la presión o urgencia la bloquea"},
+  {"codigo": "desorganizado", "nombre": "Desorganizado", "descripcion": "Respuestas contradictorias; mezcla de atracción e incomodidad ante la cercanía"}
+]

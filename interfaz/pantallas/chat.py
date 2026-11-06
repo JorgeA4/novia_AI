@@ -144,8 +144,8 @@ class PantallaChat(Screen):
         etapas = {e.codigo: e for e in repos.catalogos.obtener_etapas_relacion()}
         catalogo_idx = {e.codigo: e for e in catalogo}
 
-        etapa_nombre = etapas.get(relacion.etapa, None)
-        etapa_str = etapa_nombre.nombre if etapa_nombre else relacion.etapa
+        etapa_nombre = etapas.get(relacion.etapa_id, None)
+        etapa_str = etapa_nombre.nombre if etapa_nombre else relacion.etapa_id
 
         # Nombres legibles de las tres capas directamente desde el catálogo
         emo_nombre = catalogo_idx.get(estado.emocion_id)

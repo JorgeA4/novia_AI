@@ -66,8 +66,8 @@ def filtrar_representados_en_historial(
     return [
         recuerdo
         for recuerdo in recuerdos
-        if recuerdo.mensaje_origen_num is None
-        or recuerdo.mensaje_origen_num not in numeros_mensajes
+        if recuerdo.mensaje_origen_id is None
+        or recuerdo.mensaje_origen_id not in numeros_mensajes
     ]
 
 
@@ -89,12 +89,12 @@ def inicializar_relevancia(recuerdo: Recuerdo) -> float:
 def decaer_relevancia(recuerdo: Recuerdo, ahora: datetime) -> Recuerdo:
     """
     Aplica decaimiento exponencial a `relevancia_activa` según el tiempo transcurrido
-    desde `ultima_recuperacion` (o `fecha_creacion` si nunca fue recuperado).
+    desde `ult_recuperacion` (o `fecha_creacion` si nunca fue recuperado).
 
     La semivida se lee de `cfg.recuerdos.relevancia_semivida_dias`.
     No modifica ningún otro campo del recuerdo.
     """
-    referencia = recuerdo.ultima_recuperacion or recuerdo.fecha_creacion
+    referencia = recuerdo.ult_recuperacion or recuerdo.fecha_creacion
     # Normalizar zona horaria
     if referencia.tzinfo is None:
         referencia = referencia.replace(tzinfo=timezone.utc)
@@ -115,14 +115,14 @@ def aplicar_boost_recuperacion(recuerdo: Recuerdo, ahora: datetime) -> Recuerdo:
 
     El techo es siempre `importancia` — el recuerdo no puede volverse más relevante
     de lo que fue importante en su momento.
-    Actualiza también `ultima_recuperacion` al momento actual.
+    Actualiza también `ult_recuperacion` al momento actual.
     """
     from dataclasses import replace as dc_replace
     nueva_relevancia = min(
         recuerdo.relevancia_activa + cfg.recuerdos.relevancia_boost_recuperacion,
         recuerdo.importancia,
     )
-    return dc_replace(recuerdo, relevancia_activa=nueva_relevancia, ultima_recuperacion=ahora)
+    return dc_replace(recuerdo, relevancia_activa=nueva_relevancia, ult_recuperacion=ahora)
 
 
 # ---------------------------------------------------------------------------
